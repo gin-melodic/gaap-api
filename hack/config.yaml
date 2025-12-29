@@ -1,0 +1,14 @@
+
+# CLI tool, only in development environment.
+# https://goframe.org/docs/cli
+gfcli:
+  gen:
+    dao:
+      - link: "pgsql:gaap_user:IykYfaBHF4NbS7No@tcp(127.0.0.1:5432)/gaap"
+        descriptionTag: true
+        type: "pgsql"
+
+  docker:
+    build: "-a amd64 -s linux -p temp -ew"
+    tagPrefixes:
+      - my.image.pub/my-app
