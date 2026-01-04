@@ -60,8 +60,8 @@ func (s *sAuth) Login(ctx context.Context, in model.LoginInput) (out *model.Auth
 		return nil, errors.New("invalid email or password")
 	}
 
-	// Verify password
-	if strings.TrimSpace(in.Password) != strings.TrimSpace(user.Password) {
+	// Verify password (frontend sends SHA-256 hash, stored password is bcrypt hash of SHA-256)
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(in.Password)); err != nil {
 		return nil, errors.New("invalid email or password")
 	}
 

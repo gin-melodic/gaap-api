@@ -38,14 +38,16 @@ ON CONFLICT (type) DO UPDATE SET
     icon = EXCLUDED.icon;
 
 -- Users
--- The plain of '9b84b0001e3dc1eda54e7d755ed9167cca598cf6d08803f2f0b91cd9cbaf67a4' is 
+-- Password: 1234qwer@ (SHA-256 hashed by frontend, then bcrypt hashed by backend)
+-- SHA-256 of '1234qwer@' = 9b84b0001e3dc1eda54e7d755ed9167cca598cf6d08803f2f0b91cd9cbaf67a4
+-- bcrypt of above = $2a$10$7YrlgOhYl8FASA9ZBG2H8uuT68C4RO4NHgpfQem.176HzTd7TcU1K
 INSERT INTO users (id, password, email, nickname, avatar, plan, deleted_at, theme_id, main_currency, two_factor_enabled, two_factor_secret) VALUES 
 -- 1. Demo User (Matches frontend initial state)
-('01938d64-5c6b-7d24-8f3a-000000000007'::uuid, '9b84b0001e3dc1eda54e7d755ed9167cca598cf6d08803f2f0b91cd9cbaf67a4', 'demo@gaap.local', 'Demo User', NULL, 'PRO', NULL, '01938d64-5c6b-7d24-8f3a-000000000001'::uuid, 'CNY', FALSE, NULL),
+('01938d64-5c6b-7d24-8f3a-000000000007'::uuid, '$2a$10$7YrlgOhYl8FASA9ZBG2H8uuT68C4RO4NHgpfQem.176HzTd7TcU1K', 'demo@gaap.local', 'Demo User', NULL, 'PRO', NULL, '01938d64-5c6b-7d24-8f3a-000000000001'::uuid, 'CNY', FALSE, NULL),
 -- 2. Secure User (2FA Enabled, Key for testing: JBSWY3DPEHPK3PXP)
-('01938d64-5c6b-7d24-8f3a-000000000008'::uuid, '9b84b0001e3dc1eda54e7d755ed9167cca598cf6d08803f2f0b91cd9cbaf67a4', 'secure@gaap.local', 'Secure User', NULL, 'PRO', NULL, '01938d64-5c6b-7d24-8f3a-000000000004'::uuid, 'USD', TRUE, 'JBSWY3DPEHPK3PXP'),
+('01938d64-5c6b-7d24-8f3a-000000000008'::uuid, '$2a$10$7YrlgOhYl8FASA9ZBG2H8uuT68C4RO4NHgpfQem.176HzTd7TcU1K', 'secure@gaap.local', 'Secure User', NULL, 'PRO', NULL, '01938d64-5c6b-7d24-8f3a-000000000004'::uuid, 'USD', TRUE, 'JBSWY3DPEHPK3PXP'),
 -- 3. Free User
-('01938d64-5c6b-7d24-8f3a-000000000009'::uuid, '9b84b0001e3dc1eda54e7d755ed9167cca598cf6d08803f2f0b91cd9cbaf67a4', 'free@gaap.local', 'Free User', NULL, 'FREE', NULL, '01938d64-5c6b-7d24-8f3a-000000000002'::uuid, 'CNY', FALSE, NULL)
+('01938d64-5c6b-7d24-8f3a-000000000009'::uuid, '$2a$10$7YrlgOhYl8FASA9ZBG2H8uuT68C4RO4NHgpfQem.176HzTd7TcU1K', 'free@gaap.local', 'Free User', NULL, 'FREE', NULL, '01938d64-5c6b-7d24-8f3a-000000000002'::uuid, 'CNY', FALSE, NULL)
 ON CONFLICT (email) DO UPDATE SET
     id = EXCLUDED.id,
     nickname = EXCLUDED.nickname,
