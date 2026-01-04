@@ -11,6 +11,7 @@ type IAccount interface {
 	GetAccount(ctx context.Context, id string) (out *model.Account, err error)
 	UpdateAccount(ctx context.Context, id string, in model.AccountUpdateInput) (out *model.Account, err error)
 	DeleteAccount(ctx context.Context, id string, migrationTargets map[string]string) (taskId string, err error)
+	GetAccountTransactionCount(ctx context.Context, id string) (count int, err error)
 }
 
 var localAccount IAccount

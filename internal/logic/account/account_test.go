@@ -162,26 +162,19 @@ func Test_Account_CRUD(t *testing.T) {
 				WithArgs(sqlmock.AnyArg()).
 				WillReturnRows(rowsDelete)
 
-			// 2. Create Task (for async deletion)
-			// INSERT INTO tasks (Raw SQL, so no metadata check before this)
-			mock.ExpectQuery("INSERT INTO \"?tasks\"?").
+			// 2. Count transactions (returns 0 - no transactions)
+			testutil.MockMeta(mock, "transactions", []string{"id", "user_id", "date", "from_account_id", "to_account_id", "amount", "currency", "note", "type", "created_at", "updated_at", "deleted_at"})
+			mock.ExpectQuery("SELECT COUNT").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+
+			// 3. Direct soft-delete (no task creation since there are no transactions)
+			// Args: deleted_at, updated_at (auto added by ORM), id, user_id
+			mock.ExpectExec("UPDATE \"?accounts\"?").
 				WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
-				WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow("task_1"))
-
-			// 3. Select Task (GetTask called after Create)
-			// GoFrame fetches tasks metadata first here because GetTask uses DAO
-			testutil.MockMeta(mock, "tasks", []string{"id", "user_id", "type", "status", "payload", "result", "progress", "total_items", "processed_items", "started_at", "completed_at", "created_at", "updated_at"})
-
-			// Select Task Query
-			rowsTask := sqlmock.NewRows([]string{"id", "user_id", "type", "status", "created_at", "updated_at"}).
-				AddRow("task_1", "1", "ACCOUNT_MIGRATION", "PENDING", "2023-01-01", "2023-01-01")
-			mock.ExpectQuery("SELECT .* FROM \"?tasks\"?").
-				WithArgs("task_1").
-				WillReturnRows(rowsTask)
+				WillReturnResult(sqlmock.NewResult(1, 1))
 
 			taskId, err := service.Account().DeleteAccount(ctx, createdId, nil)
 			g.AssertNil(err)
-			g.Assert(taskId, "task_1")
+			g.Assert(taskId, "") // No task created for accounts without transactions
 
 			// Verification of deletion is skipped because it's async (handled by worker)
 		} else {
