@@ -100,3 +100,14 @@ type DeleteAccountRes struct {
 	TaskId string `json:"taskId,omitempty"` // Task ID for async migration
 	*common.BaseResponse
 }
+
+type GetAccountTransactionCountReq struct {
+	g.Meta `path:"/accounts/{id}/transaction-count" tags:"Accounts" method:"get" summary:"Get transaction count for account"`
+	Id     string `json:"id" v:"required"`
+}
+
+type GetAccountTransactionCountRes struct {
+	g.Meta `mime:"application/json"`
+	Count  int `json:"count"`
+	*common.BaseResponse
+}

@@ -238,3 +238,18 @@ func (c *ControllerV1) DeleteAccount(ctx context.Context, req *v1.DeleteAccountR
 	}
 	return
 }
+
+func (c *ControllerV1) GetAccountTransactionCount(ctx context.Context, req *v1.GetAccountTransactionCountReq) (res *v1.GetAccountTransactionCountRes, err error) {
+	count, err := service.Account().GetAccountTransactionCount(ctx, req.Id)
+	if err != nil {
+		return &v1.GetAccountTransactionCountRes{
+			BaseResponse: &common.BaseResponse{
+				Message: err.Error(),
+			},
+		}, nil
+	}
+	res = &v1.GetAccountTransactionCountRes{
+		Count: count,
+	}
+	return
+}

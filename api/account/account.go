@@ -11,4 +11,5 @@ type IAccountV1 interface {
 	GetAccount(ctx context.Context, req *v1.GetAccountReq) (res *v1.GetAccountRes, err error)
 	UpdateAccount(ctx context.Context, req *v1.UpdateAccountReq) (res *v1.UpdateAccountRes, err error)
 	DeleteAccount(ctx context.Context, req *v1.DeleteAccountReq) (res *v1.DeleteAccountRes, err error)
+	GetAccountTransactionCount(ctx context.Context, req *v1.GetAccountTransactionCountReq) (res *v1.GetAccountTransactionCountRes, err error)
 }

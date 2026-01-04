@@ -14,11 +14,12 @@ import (
 
 // mockAccountService implements service.IAccount for testing
 type mockAccountService struct {
-	listAccountsFunc  func(ctx context.Context, in model.AccountQueryInput) (out []model.Account, total int, err error)
-	createAccountFunc func(ctx context.Context, in model.AccountCreateInput) (out *model.Account, err error)
-	getAccountFunc    func(ctx context.Context, id string) (out *model.Account, err error)
-	updateAccountFunc func(ctx context.Context, id string, in model.AccountUpdateInput) (out *model.Account, err error)
-	deleteAccountFunc func(ctx context.Context, id string, migrationTargets map[string]string) (taskId string, err error)
+	listAccountsFunc               func(ctx context.Context, in model.AccountQueryInput) (out []model.Account, total int, err error)
+	createAccountFunc              func(ctx context.Context, in model.AccountCreateInput) (out *model.Account, err error)
+	getAccountFunc                 func(ctx context.Context, id string) (out *model.Account, err error)
+	updateAccountFunc              func(ctx context.Context, id string, in model.AccountUpdateInput) (out *model.Account, err error)
+	deleteAccountFunc              func(ctx context.Context, id string, migrationTargets map[string]string) (taskId string, err error)
+	getAccountTransactionCountFunc func(ctx context.Context, id string) (count int, err error)
 }
 
 func (m *mockAccountService) ListAccounts(ctx context.Context, in model.AccountQueryInput) (out []model.Account, total int, err error) {
@@ -54,6 +55,13 @@ func (m *mockAccountService) DeleteAccount(ctx context.Context, id string, migra
 		return m.deleteAccountFunc(ctx, id, migrationTargets)
 	}
 	return "", nil
+}
+
+func (m *mockAccountService) GetAccountTransactionCount(ctx context.Context, id string) (count int, err error) {
+	if m.getAccountTransactionCountFunc != nil {
+		return m.getAccountTransactionCountFunc(ctx, id)
+	}
+	return 0, nil
 }
 
 func Test_ControllerV1_ListAccounts(t *testing.T) {

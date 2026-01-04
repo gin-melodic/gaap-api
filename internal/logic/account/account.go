@@ -9,6 +9,7 @@ import (
 	"gaap-api/internal/model/entity"
 	"gaap-api/internal/service"
 
+	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/os/gtime"
 	"github.com/gogf/gf/v2/util/gconv"
 	"github.com/google/uuid"
@@ -217,7 +218,35 @@ func (s *sAccount) DeleteAccount(ctx context.Context, id string, migrationTarget
 		}
 	}
 
-	// Create migration task
+	// Check if any account has transactions
+	accountIds := append([]string{id}, childAccountIds...)
+	var totalTransactionCount int
+	for _, accId := range accountIds {
+		count, err := dao.Transactions.Ctx(ctx).
+			Where("from_account_id = ? OR to_account_id = ?", accId, accId).
+			Count()
+		if err != nil {
+			return "", err
+		}
+		totalTransactionCount += count
+	}
+
+	// If no transactions, directly soft-delete without creating a task
+	if totalTransactionCount == 0 {
+		for _, accId := range accountIds {
+			_, err = dao.Accounts.Ctx(ctx).
+				Where("id", accId).
+				Where("user_id", userId).
+				Data(g.Map{"deleted_at": gtime.Now()}).
+				Update()
+			if err != nil {
+				return "", err
+			}
+		}
+		return "", nil // Return empty taskId to indicate direct deletion
+	}
+
+	// Has transactions - create migration task
 	payload := model.AccountMigrationPayload{
 		AccountId:        id,
 		ChildAccountIds:  childAccountIds,
@@ -234,4 +263,22 @@ func (s *sAccount) DeleteAccount(ctx context.Context, id string, migrationTarget
 	}
 
 	return task.Id, nil
+}
+
+// GetAccountTransactionCount returns the number of transactions involving this account
+func (s *sAccount) GetAccountTransactionCount(ctx context.Context, id string) (count int, err error) {
+	// Verify account exists and belongs to user
+	account, err := s.GetAccount(ctx, id)
+	if err != nil {
+		return 0, err
+	}
+	if account == nil || account.Id == "" {
+		return 0, fmt.Errorf("account not found")
+	}
+
+	// Count transactions where this account is from or to
+	count, err = dao.Transactions.Ctx(ctx).
+		Where("from_account_id = ? OR to_account_id = ?", id, id).
+		Count()
+	return count, err
 }
