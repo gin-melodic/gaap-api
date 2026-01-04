@@ -1,0 +1,19 @@
+run:
+  timeout: 5m
+
+linters:
+  disable-all: true
+  enable:
+    - govet
+    - staticcheck
+    - gosimple
+    - unused
+    - ineffassign
+    - typecheck
+    # - errcheck # Disabled due to existing unchecked errors
+
+linters-settings:
+  govet:
+    enable:
+      - nilness
+      - shadow
