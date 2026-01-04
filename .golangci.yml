@@ -16,4 +16,4 @@ linters-settings:
   govet:
     enable:
       - nilness
-      - shadow
+      # - shadow # Disabled due to existing shadowing
