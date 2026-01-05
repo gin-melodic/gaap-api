@@ -44,7 +44,7 @@ type AccountQuery struct {
 }
 
 type ListAccountsReq struct {
-	g.Meta `path:"/accounts" tags:"Accounts" method:"get" summary:"List all accounts"`
+	g.Meta `path:"/v1/accounts" tags:"Accounts" method:"get" summary:"List all accounts"`
 	AccountQuery
 }
 
@@ -56,7 +56,7 @@ type ListAccountsRes struct {
 }
 
 type CreateAccountReq struct {
-	g.Meta `path:"/accounts" tags:"Accounts" method:"post" summary:"Create a new account"`
+	g.Meta `path:"/v1/accounts" tags:"Accounts" method:"post" summary:"Create a new account"`
 	*AccountInput
 }
 
@@ -67,7 +67,7 @@ type CreateAccountRes struct {
 }
 
 type GetAccountReq struct {
-	g.Meta `path:"/accounts/{id}" tags:"Accounts" method:"get" summary:"Get account details"`
+	g.Meta `path:"/v1/accounts/{id}" tags:"Accounts" method:"get" summary:"Get account details"`
 	Id     string `json:"id" v:"required"`
 }
 
@@ -78,7 +78,7 @@ type GetAccountRes struct {
 }
 
 type UpdateAccountReq struct {
-	g.Meta `path:"/accounts/{id}" tags:"Accounts" method:"put" summary:"Update account"`
+	g.Meta `path:"/v1/accounts/{id}" tags:"Accounts" method:"put" summary:"Update account"`
 	Id     string `json:"id" v:"required"`
 	*AccountInput
 }
@@ -90,7 +90,7 @@ type UpdateAccountRes struct {
 }
 
 type DeleteAccountReq struct {
-	g.Meta           `path:"/accounts/{id}" tags:"Accounts" method:"delete" summary:"Delete account with optional migration"`
+	g.Meta           `path:"/v1/accounts/{id}" tags:"Accounts" method:"delete" summary:"Delete account with optional migration"`
 	Id               string            `json:"id" v:"required"`
 	MigrationTargets map[string]string `json:"migrationTargets"` // currency -> targetAccountId
 }
@@ -102,7 +102,7 @@ type DeleteAccountRes struct {
 }
 
 type GetAccountTransactionCountReq struct {
-	g.Meta `path:"/accounts/{id}/transaction-count" tags:"Accounts" method:"get" summary:"Get transaction count for account"`
+	g.Meta `path:"/v1/accounts/{id}/transaction-count" tags:"Accounts" method:"get" summary:"Get transaction count for account"`
 	Id     string `json:"id" v:"required"`
 }
 

@@ -30,7 +30,7 @@ type TaskQuery struct {
 }
 
 type ListTasksReq struct {
-	g.Meta `path:"/tasks" tags:"Tasks" method:"get" summary:"List all tasks for current user"`
+	g.Meta `path:"/v1/tasks" tags:"Tasks" method:"get" summary:"List all tasks for current user"`
 	TaskQuery
 }
 
@@ -42,7 +42,7 @@ type ListTasksRes struct {
 }
 
 type GetTaskReq struct {
-	g.Meta `path:"/tasks/{id}" tags:"Tasks" method:"get" summary:"Get task details"`
+	g.Meta `path:"/v1/tasks/{id}" tags:"Tasks" method:"get" summary:"Get task details"`
 	Id     string `json:"id" v:"required"`
 }
 
@@ -53,7 +53,7 @@ type GetTaskRes struct {
 }
 
 type CancelTaskReq struct {
-	g.Meta `path:"/tasks/{id}/cancel" tags:"Tasks" method:"post" summary:"Cancel a pending or running task"`
+	g.Meta `path:"/v1/tasks/{id}/cancel" tags:"Tasks" method:"post" summary:"Cancel a pending or running task"`
 	Id     string `json:"id" v:"required"`
 }
 
@@ -63,7 +63,7 @@ type CancelTaskRes struct {
 }
 
 type RetryTaskReq struct {
-	g.Meta `path:"/tasks/{id}/retry" tags:"Tasks" method:"post" summary:"Retry a failed task"`
+	g.Meta `path:"/v1/tasks/{id}/retry" tags:"Tasks" method:"post" summary:"Retry a failed task"`
 	Id     string `json:"id" v:"required"`
 }
 

@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	"gaap-api/internal/dao"
+	"gaap-api/internal/dataimport"
+	exportPkg "gaap-api/internal/export"
 	"gaap-api/internal/middleware"
 	"gaap-api/internal/model"
 	"gaap-api/internal/model/entity"
@@ -278,6 +280,10 @@ func (s *sTask) StartWorker(ctx context.Context) error {
 		switch msg.Type {
 		case model.TaskTypeAccountMigration:
 			return s.processAccountMigration(ctx, msg.Payload)
+		case model.TaskTypeDataExport:
+			return s.processDataExport(ctx, msg.Payload)
+		case model.TaskTypeDataImport:
+			return s.processDataImport(ctx, msg.Payload)
 		default:
 			g.Log().Warningf(ctx, "Unknown task type: %s", msg.Type)
 			return nil
@@ -450,4 +456,113 @@ func (s *sTask) entityToModel(e *entity.Tasks) *model.Task {
 		CreatedAt:      e.CreatedAt,
 		UpdatedAt:      e.UpdatedAt,
 	}
+}
+
+// processDataExport handles data export task
+func (s *sTask) processDataExport(ctx context.Context, payload json.RawMessage) error {
+	var data struct {
+		TaskId  string                  `json:"taskId"`
+		Payload model.DataExportPayload `json:"payload"`
+	}
+	if err := json.Unmarshal(payload, &data); err != nil {
+		return fmt.Errorf("failed to unmarshal export payload: %w", err)
+	}
+
+	taskId := data.TaskId
+	exportPayload := data.Payload
+
+	// Update task status to running
+	_, err := dao.Tasks.Ctx(ctx).Where("id", taskId).Data(g.Map{
+		"status":     model.TaskStatusRunning,
+		"started_at": gtime.Now(),
+	}).Update()
+	if err != nil {
+		return err
+	}
+
+	// Check if task was cancelled
+	task, err := s.GetTask(ctx, taskId)
+	if err != nil || task.Status == model.TaskStatusCancelled {
+		return nil
+	}
+
+	// Import the export package dynamically to avoid circular imports
+	// For now, we'll call the export function directly
+	exportResult, err := s.executeDataExport(ctx, taskId, &exportPayload)
+	if err != nil {
+		s.FailTask(ctx, taskId, err.Error())
+		return err
+	}
+
+	return s.CompleteTask(ctx, taskId, exportResult)
+}
+
+// executeDataExport performs the actual data export
+func (s *sTask) executeDataExport(ctx context.Context, taskId string, payload *model.DataExportPayload) (*model.DataExportResult, error) {
+	// Import the export package here
+	result, err := exportPkg.CreateExport(ctx, payload.UserId, payload.StartDate, payload.EndDate)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.DataExportResult{
+		FilePath:             result.FilePath,
+		FileName:             result.FileName,
+		FileSize:             result.FileSize,
+		AccountsExported:     result.AccountsExported,
+		TransactionsExported: result.TransactionsExported,
+	}, nil
+}
+
+// processDataImport handles data import task
+func (s *sTask) processDataImport(ctx context.Context, payload json.RawMessage) error {
+	var data struct {
+		TaskId  string                  `json:"taskId"`
+		Payload model.DataImportPayload `json:"payload"`
+	}
+	if err := json.Unmarshal(payload, &data); err != nil {
+		return fmt.Errorf("failed to unmarshal import payload: %w", err)
+	}
+
+	taskId := data.TaskId
+	importPayload := data.Payload
+
+	// Update task status to running
+	_, err := dao.Tasks.Ctx(ctx).Where("id", taskId).Data(g.Map{
+		"status":     model.TaskStatusRunning,
+		"started_at": gtime.Now(),
+	}).Update()
+	if err != nil {
+		return err
+	}
+
+	// Check if task was cancelled
+	task, err := s.GetTask(ctx, taskId)
+	if err != nil || task.Status == model.TaskStatusCancelled {
+		return nil
+	}
+
+	// Execute import
+	importResult, err := s.executeDataImport(ctx, taskId, &importPayload)
+	if err != nil {
+		s.FailTask(ctx, taskId, err.Error())
+		return err
+	}
+
+	return s.CompleteTask(ctx, taskId, importResult)
+}
+
+// executeDataImport performs the actual data import
+func (s *sTask) executeDataImport(ctx context.Context, taskId string, payload *model.DataImportPayload) (*model.DataImportResult, error) {
+	result, err := dataimport.ImportData(ctx, payload.UserId, payload.FileName)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.DataImportResult{
+		AccountsImported:     result.AccountsImported,
+		TransactionsImported: result.TransactionsImported,
+		AccountsSkipped:      result.AccountsSkipped,
+		TransactionsSkipped:  result.TransactionsSkipped,
+	}, nil
 }

@@ -23,7 +23,7 @@ type DailyBalance struct {
 }
 
 type GetDashboardSummaryReq struct {
-	g.Meta `path:"/dashboard/summary" tags:"Dashboard" method:"get" summary:"Get dashboard summary"`
+	g.Meta `path:"/v1/dashboard/summary" tags:"Dashboard" method:"get" summary:"Get dashboard summary"`
 }
 
 type GetDashboardSummaryRes struct {
@@ -33,7 +33,7 @@ type GetDashboardSummaryRes struct {
 }
 
 type GetMonthlyStatsReq struct {
-	g.Meta `path:"/dashboard/monthly-stats" tags:"Dashboard" method:"get" summary:"Get monthly income and expense statistics"`
+	g.Meta `path:"/v1/dashboard/monthly-stats" tags:"Dashboard" method:"get" summary:"Get monthly income and expense statistics"`
 }
 
 type GetMonthlyStatsRes struct {
@@ -43,7 +43,7 @@ type GetMonthlyStatsRes struct {
 }
 
 type GetBalanceTrendReq struct {
-	g.Meta   `path:"/dashboard/balance-trend" tags:"Dashboard" method:"get" summary:"Get balance trend data for the last 30 days"`
+	g.Meta   `path:"/v1/dashboard/balance-trend" tags:"Dashboard" method:"get" summary:"Get balance trend data for the last 30 days"`
 	Accounts []string `json:"accounts" v:"max-length:50"`
 }
 

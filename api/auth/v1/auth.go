@@ -15,7 +15,7 @@ type AuthResponse struct {
 }
 
 type LoginReq struct {
-	g.Meta              `path:"/auth/login" tags:"Authentication" method:"post" summary:"User login"`
+	g.Meta              `path:"/v1/auth/login" tags:"Authentication" method:"post" summary:"User login"`
 	Email               string `json:"email" v:"required|email"`
 	Password            string `json:"password" v:"required|min-length:8"`
 	Code                string `json:"code" v:"length:6,6"`
@@ -29,7 +29,7 @@ type LoginRes struct {
 }
 
 type RegisterReq struct {
-	g.Meta              `path:"/auth/register" tags:"Authentication" method:"post" summary:"User registration"`
+	g.Meta              `path:"/v1/auth/register" tags:"Authentication" method:"post" summary:"User registration"`
 	Email               string `json:"email" v:"required|email"`
 	Password            string `json:"password" v:"required|min-length:8"`
 	Nickname            string `json:"nickname" v:"required|max-length:50"`
@@ -43,7 +43,7 @@ type RegisterRes struct {
 }
 
 type LogoutReq struct {
-	g.Meta `path:"/auth/logout" tags:"Authentication" method:"post" summary:"User logout"`
+	g.Meta `path:"/v1/auth/logout" tags:"Authentication" method:"post" summary:"User logout"`
 }
 
 type LogoutRes struct {
@@ -52,7 +52,7 @@ type LogoutRes struct {
 }
 
 type RefreshTokenReq struct {
-	g.Meta       `path:"/auth/refresh" tags:"Authentication" method:"post" summary:"Refresh access token"`
+	g.Meta       `path:"/v1/auth/refresh" tags:"Authentication" method:"post" summary:"Refresh access token"`
 	RefreshToken string `json:"refreshToken" v:"required"`
 }
 
@@ -69,7 +69,7 @@ type TwoFactorSecret struct {
 }
 
 type Generate2FAReq struct {
-	g.Meta `path:"/auth/2fa/generate" tags:"Authentication" method:"post" summary:"Generate 2FA secret"`
+	g.Meta `path:"/v1/auth/2fa/generate" tags:"Authentication" method:"post" summary:"Generate 2FA secret"`
 }
 
 type Generate2FARes struct {
@@ -79,7 +79,7 @@ type Generate2FARes struct {
 }
 
 type Enable2FAReq struct {
-	g.Meta `path:"/auth/2fa/enable" tags:"Authentication" method:"post" summary:"Enable 2FA"`
+	g.Meta `path:"/v1/auth/2fa/enable" tags:"Authentication" method:"post" summary:"Enable 2FA"`
 	Code   string `json:"code" v:"required|length:6,6"`
 }
 
@@ -89,7 +89,7 @@ type Enable2FARes struct {
 }
 
 type Disable2FAReq struct {
-	g.Meta   `path:"/auth/2fa/disable" tags:"Authentication" method:"post" summary:"Disable 2FA"`
+	g.Meta   `path:"/v1/auth/2fa/disable" tags:"Authentication" method:"post" summary:"Disable 2FA"`
 	Code     string `json:"code" v:"required|length:6,6"`
 	Password string `json:"password" v:"required"`
 }

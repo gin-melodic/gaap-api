@@ -12,6 +12,7 @@ import (
 	"gaap-api/internal/controller/auth"
 	"gaap-api/internal/controller/config"
 	"gaap-api/internal/controller/dashboard"
+	"gaap-api/internal/controller/data"
 	"gaap-api/internal/controller/debug"
 	"gaap-api/internal/controller/health"
 	"gaap-api/internal/controller/hello"
@@ -64,6 +65,7 @@ var (
 					transaction.NewV1(),
 					dashboard.NewV1(),
 					task.NewV1(),
+					data.NewV1(),
 					debug.NewV1(),
 				)
 			})

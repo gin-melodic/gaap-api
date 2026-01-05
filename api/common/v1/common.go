@@ -33,3 +33,12 @@ type AccountTypeConfig struct {
 	Bg    string `json:"bg" v:"max-length:9|regex:^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$"`
 	Icon  string `json:"icon" v:"max-length:50"`
 }
+
+// Task is a generic task structure for API responses
+type Task[P any, R any] struct {
+	TaskId   string `json:"taskId"`
+	Status   string `json:"status"`
+	Progress int    `json:"progress"`
+	Payload  P      `json:"payload,omitempty"`
+	Result   R      `json:"result,omitempty"`
+}
