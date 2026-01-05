@@ -42,7 +42,7 @@ type TransactionQuery struct {
 }
 
 type ListTransactionsReq struct {
-	g.Meta `path:"/transactions" tags:"Transactions" method:"get" summary:"List transactions"`
+	g.Meta `path:"/v1/transactions" tags:"Transactions" method:"get" summary:"List transactions"`
 	TransactionQuery
 }
 
@@ -54,7 +54,7 @@ type ListTransactionsRes struct {
 }
 
 type CreateTransactionReq struct {
-	g.Meta `path:"/transactions" tags:"Transactions" method:"post" summary:"Create a new transaction"`
+	g.Meta `path:"/v1/transactions" tags:"Transactions" method:"post" summary:"Create a new transaction"`
 	*TransactionInput
 }
 
@@ -65,7 +65,7 @@ type CreateTransactionRes struct {
 }
 
 type GetTransactionReq struct {
-	g.Meta `path:"/transactions/{id}" tags:"Transactions" method:"get" summary:"Get transaction details"`
+	g.Meta `path:"/v1/transactions/{id}" tags:"Transactions" method:"get" summary:"Get transaction details"`
 	Id     string `json:"id" v:"required"`
 }
 
@@ -76,7 +76,7 @@ type GetTransactionRes struct {
 }
 
 type UpdateTransactionReq struct {
-	g.Meta `path:"/transactions/{id}" tags:"Transactions" method:"put" summary:"Update transaction"`
+	g.Meta `path:"/v1/transactions/{id}" tags:"Transactions" method:"put" summary:"Update transaction"`
 	Id     string `json:"id" v:"required"`
 	*TransactionInput
 }
@@ -88,7 +88,7 @@ type UpdateTransactionRes struct {
 }
 
 type DeleteTransactionReq struct {
-	g.Meta `path:"/transactions/{id}" tags:"Transactions" method:"delete" summary:"Delete transaction"`
+	g.Meta `path:"/v1/transactions/{id}" tags:"Transactions" method:"delete" summary:"Delete transaction"`
 	Id     string `json:"id" v:"required"`
 }
 

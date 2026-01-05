@@ -22,7 +22,7 @@ type UserInput struct {
 }
 
 type GetUserProfileReq struct {
-	g.Meta `path:"/user/profile" tags:"User" method:"get" summary:"Get current user profile"`
+	g.Meta `path:"/v1/user/profile" tags:"User" method:"get" summary:"Get current user profile"`
 }
 
 type GetUserProfileRes struct {
@@ -32,7 +32,7 @@ type GetUserProfileRes struct {
 }
 
 type UpdateUserProfileReq struct {
-	g.Meta `path:"/user/profile" tags:"User" method:"put" summary:"Update user profile"`
+	g.Meta `path:"/v1/user/profile" tags:"User" method:"put" summary:"Update user profile"`
 	*UserInput
 }
 
@@ -43,7 +43,7 @@ type UpdateUserProfileRes struct {
 }
 
 type UpdateThemePreferenceReq struct {
-	g.Meta `path:"/user/preferences/theme" tags:"User" method:"put" summary:"Update user theme preference"`
+	g.Meta `path:"/v1/user/preferences/theme" tags:"User" method:"put" summary:"Update user theme preference"`
 	*common.Theme
 }
 

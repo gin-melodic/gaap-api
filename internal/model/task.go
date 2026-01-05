@@ -14,6 +14,8 @@ const (
 // Task type constants
 const (
 	TaskTypeAccountMigration = "ACCOUNT_MIGRATION"
+	TaskTypeDataExport       = "DATA_EXPORT"
+	TaskTypeDataImport       = "DATA_IMPORT"
 )
 
 // Task represents a background task
@@ -60,5 +62,37 @@ type AccountMigrationResult struct {
 	TransactionsMigrated int    `json:"transactionsMigrated"`
 	BalancesMerged       int    `json:"balancesMerged"`
 	AccountsDeleted      int    `json:"accountsDeleted"`
+	Error                string `json:"error,omitempty"`
+}
+
+// DataExportPayload for data export task
+type DataExportPayload struct {
+	UserId    string `json:"userId"`
+	StartDate string `json:"startDate"` // YYYY-MM-DD
+	EndDate   string `json:"endDate"`   // YYYY-MM-DD
+}
+
+// DataExportResult for data export task completion
+type DataExportResult struct {
+	FilePath             string `json:"filePath"`
+	FileName             string `json:"fileName"`
+	FileSize             int64  `json:"fileSize"`
+	AccountsExported     int    `json:"accountsExported"`
+	TransactionsExported int    `json:"transactionsExported"`
+	Error                string `json:"error,omitempty"`
+}
+
+// DataImportPayload for data import task
+type DataImportPayload struct {
+	UserId   string `json:"userId"`
+	FileName string `json:"fileName"`
+}
+
+// DataImportResult for data import task completion
+type DataImportResult struct {
+	AccountsImported     int    `json:"accountsImported"`
+	TransactionsImported int    `json:"transactionsImported"`
+	AccountsSkipped      int    `json:"accountsSkipped"`
+	TransactionsSkipped  int    `json:"transactionsSkipped"`
 	Error                string `json:"error,omitempty"`
 }

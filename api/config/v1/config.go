@@ -7,7 +7,7 @@ import (
 )
 
 type ListCurrenciesReq struct {
-	g.Meta `path:"/config/currencies" tags:"Configuration" method:"get" summary:"Get supported currencies"`
+	g.Meta `path:"/v1/config/currencies" tags:"Configuration" method:"get" summary:"Get supported currencies"`
 }
 
 type ListCurrenciesRes struct {
@@ -17,7 +17,7 @@ type ListCurrenciesRes struct {
 }
 
 type AddCurrencyReq struct {
-	g.Meta `path:"/config/currencies" tags:"Configuration" method:"post" summary:"Add a supported currency"`
+	g.Meta `path:"/v1/config/currencies" tags:"Configuration" method:"post" summary:"Add a supported currency"`
 	Code   string `json:"code" v:"required"`
 }
 
@@ -28,7 +28,7 @@ type AddCurrencyRes struct {
 }
 
 type DeleteCurrencyReq struct {
-	g.Meta `path:"/config/currencies" tags:"Configuration" method:"delete" summary:"Remove a supported currency"`
+	g.Meta `path:"/v1/config/currencies" tags:"Configuration" method:"delete" summary:"Remove a supported currency"`
 	Code   string `json:"code" v:"required"`
 }
 
@@ -38,7 +38,7 @@ type DeleteCurrencyRes struct {
 }
 
 type GetThemesReq struct {
-	g.Meta `path:"/config/themes" tags:"Configuration" method:"get" summary:"Get available themes"`
+	g.Meta `path:"/v1/config/themes" tags:"Configuration" method:"get" summary:"Get available themes"`
 }
 
 type GetThemesRes struct {
@@ -48,7 +48,7 @@ type GetThemesRes struct {
 }
 
 type GetAccountTypesReq struct {
-	g.Meta `path:"/config/account-types" tags:"Configuration" method:"get" summary:"Get account type definitions"`
+	g.Meta `path:"/v1/config/account-types" tags:"Configuration" method:"get" summary:"Get account type definitions"`
 }
 
 type GetAccountTypesRes struct {
