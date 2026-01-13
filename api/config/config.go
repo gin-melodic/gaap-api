@@ -1,14 +1,19 @@
+// =================================================================================
+// Code generated and maintained by GoFrame CLI tool. DO NOT EDIT.
+// =================================================================================
+
 package config
 
 import (
 	"context"
-	v1 "gaap-api/api/config/v1"
+
+	"gaap-api/api/config/v1"
 )
 
 type IConfigV1 interface {
-	ListCurrencies(ctx context.Context, req *v1.ListCurrenciesReq) (res *v1.ListCurrenciesRes, err error)
-	AddCurrency(ctx context.Context, req *v1.AddCurrencyReq) (res *v1.AddCurrencyRes, err error)
-	DeleteCurrency(ctx context.Context, req *v1.DeleteCurrencyReq) (res *v1.DeleteCurrencyRes, err error)
-	GetThemes(ctx context.Context, req *v1.GetThemesReq) (res *v1.GetThemesRes, err error)
-	GetAccountTypes(ctx context.Context, req *v1.GetAccountTypesReq) (res *v1.GetAccountTypesRes, err error)
+	GfListCurrencies(ctx context.Context, req *v1.GfListCurrenciesReq) (res *v1.GfListCurrenciesRes, err error)
+	GfAddCurrency(ctx context.Context, req *v1.GfAddCurrencyReq) (res *v1.GfAddCurrencyRes, err error)
+	GfDeleteCurrency(ctx context.Context, req *v1.GfDeleteCurrencyReq) (res *v1.GfDeleteCurrencyRes, err error)
+	GfGetThemes(ctx context.Context, req *v1.GfGetThemesReq) (res *v1.GfGetThemesRes, err error)
+	GfGetAccountTypes(ctx context.Context, req *v1.GfGetAccountTypesReq) (res *v1.GfGetAccountTypesRes, err error)
 }

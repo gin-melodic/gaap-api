@@ -13,7 +13,6 @@ import (
 	"gaap-api/internal/controller/config"
 	"gaap-api/internal/controller/dashboard"
 	"gaap-api/internal/controller/data"
-	"gaap-api/internal/controller/debug"
 	"gaap-api/internal/controller/health"
 	"gaap-api/internal/controller/hello"
 	"gaap-api/internal/controller/task"
@@ -53,7 +52,7 @@ var (
 
 			// WebSocket route (special handling, no MiddlewareHandlerResponse)
 			// Note: Route is /ws because Caddy's handle_path /api/* strips the /api prefix
-			s.BindHandler("/ws", ws.Handler)
+			s.BindHandler("/v1/ws", ws.Handler)
 
 			// Protected routes (authentication required)
 			s.Group("/", func(group *ghttp.RouterGroup) {
@@ -66,7 +65,6 @@ var (
 					dashboard.NewV1(),
 					task.NewV1(),
 					data.NewV1(),
-					debug.NewV1(),
 				)
 			})
 

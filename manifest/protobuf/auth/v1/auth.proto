@@ -1,0 +1,106 @@
+syntax = "proto3";
+
+package auth.v1;
+
+option go_package = "gaap-api/api/auth/v1;v1";
+
+import "base/base.proto";
+import "user/v1/user.proto";
+
+service AuthService {
+  // User login
+  rpc Login(LoginReq) returns (LoginRes);
+  
+  // User registration
+  rpc Register(RegisterReq) returns (RegisterRes);
+  
+  // User logout
+  rpc Logout(LogoutReq) returns (LogoutRes);
+  
+  // Refresh access token
+  rpc RefreshToken(RefreshTokenReq) returns (RefreshTokenRes);
+  
+  // Generate 2FA secret
+  rpc Generate2FA(Generate2FAReq) returns (Generate2FARes);
+  
+  // Enable 2FA
+  rpc Enable2FA(Enable2FAReq) returns (Enable2FARes);
+  
+  // Disable 2FA
+  rpc Disable2FA(Disable2FAReq) returns (Disable2FARes);
+}
+
+message AuthResponse {
+  string access_token = 1;
+  string refresh_token = 2;
+  user.v1.User user = 3;
+}
+
+message LoginReq {
+  string email = 1;
+  string password = 2;
+  string code = 3;
+  string cf_turnstile_response = 4;
+}
+
+message LoginRes {
+  AuthResponse auth = 1;
+  base.BaseResponse base = 255;
+}
+
+message RegisterReq {
+  string email = 1;
+  string password = 2;
+  string nickname = 3;
+  string cf_turnstile_response = 4;
+}
+
+message RegisterRes {
+  AuthResponse auth = 1;
+  base.BaseResponse base = 255;
+}
+
+message LogoutReq {}
+
+message LogoutRes {
+  base.BaseResponse base = 255;
+}
+
+message RefreshTokenReq {
+  string refresh_token = 1;
+}
+
+message RefreshTokenRes {
+  string access_token = 1;
+  string refresh_token = 2;
+  base.BaseResponse base = 255;
+}
+
+message TwoFactorSecret {
+  string secret = 1;
+  string url = 2;
+}
+
+message Generate2FAReq {}
+
+message Generate2FARes {
+  TwoFactorSecret secret = 1;
+  base.BaseResponse base = 255;
+}
+
+message Enable2FAReq {
+  string code = 1;
+}
+
+message Enable2FARes {
+  base.BaseResponse base = 255;
+}
+
+message Disable2FAReq {
+  string code = 1;
+  string password = 2;
+}
+
+message Disable2FARes {
+  base.BaseResponse base = 255;
+}

@@ -1,7 +1,9 @@
 package model
 
+import "github.com/google/uuid"
+
 type Theme struct {
-	Id     string
+	Id     uuid.UUID
 	Name   string
 	IsDark bool
 	Colors ThemeColors

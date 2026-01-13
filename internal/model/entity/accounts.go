@@ -1,24 +1,27 @@
 // =================================================================================
-// Code generated and maintained by GoFrame CLI tool. DO NOT EDIT.
+// Code generated and maintained by GoFrame CLI tool. DO NOT EDIT. Created at 2026-01-08 17:02:34
 // =================================================================================
 
 package entity
 
 import (
 	"github.com/gogf/gf/v2/os/gtime"
+	"github.com/google/uuid"
 )
 
 // Accounts is the golang structure for table accounts.
 type Accounts struct {
-	Id             string      `json:"id"             orm:"id"               description:""` //
-	UserId         string      `json:"userId"         orm:"user_id"          description:""` //
-	ParentId       string      `json:"parentId"       orm:"parent_id"        description:""` //
+	Id             uuid.UUID   `json:"id"             orm:"id"               description:""` //
+	UserId         uuid.UUID   `json:"userId"         orm:"user_id"          description:""` //
+	ParentId       uuid.UUID   `json:"parentId"       orm:"parent_id"        description:""` //
 	Name           string      `json:"name"           orm:"name"             description:""` //
-	Type           string      `json:"type"           orm:"type"             description:""` //
+	Type           int         `json:"type"           orm:"type"             description:""` //
 	IsGroup        bool        `json:"isGroup"        orm:"is_group"         description:""` //
-	Balance        float64     `json:"balance"        orm:"balance"          description:""` //
-	Currency       string      `json:"currency"       orm:"currency"         description:""` //
-	DefaultChildId string      `json:"defaultChildId" orm:"default_child_id" description:""` //
+	CurrencyCode   string      `json:"currencyCode"   orm:"currency_code"    description:""` //
+	BalanceUnits   int64       `json:"balanceUnits"   orm:"balance_units"    description:""` //
+	BalanceNanos   int         `json:"balanceNanos"   orm:"balance_nanos"    description:""` //
+	BalanceDecimal float64     `json:"balanceDecimal" orm:"balance_decimal"  description:""` //
+	DefaultChildId uuid.UUID   `json:"defaultChildId" orm:"default_child_id" description:""` //
 	Date           *gtime.Time `json:"date"           orm:"date"             description:""` //
 	Number         string      `json:"number"         orm:"number"           description:""` //
 	Remarks        string      `json:"remarks"        orm:"remarks"          description:""` //

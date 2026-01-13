@@ -1,5 +1,5 @@
 // ==========================================================================
-// Code generated and maintained by GoFrame CLI tool. DO NOT EDIT.
+// Code generated and maintained by GoFrame CLI tool. DO NOT EDIT. Created at 2026-01-08 17:02:34
 // ==========================================================================
 
 package internal
@@ -21,34 +21,38 @@ type TransactionsDao struct {
 
 // TransactionsColumns defines and stores column names for the table transactions.
 type TransactionsColumns struct {
-	Id            string //
-	UserId        string //
-	Date          string //
-	FromAccountId string //
-	ToAccountId   string //
-	Amount        string //
-	Currency      string //
-	Note          string //
-	Type          string //
-	CreatedAt     string //
-	UpdatedAt     string //
-	DeletedAt     string //
+	Id             string //
+	UserId         string //
+	Date           string //
+	FromAccountId  string //
+	ToAccountId    string //
+	CurrencyCode   string //
+	BalanceUnits   string //
+	BalanceNanos   string //
+	BalanceDecimal string //
+	Note           string //
+	Type           string //
+	CreatedAt      string //
+	UpdatedAt      string //
+	DeletedAt      string //
 }
 
 // transactionsColumns holds the columns for the table transactions.
 var transactionsColumns = TransactionsColumns{
-	Id:            "id",
-	UserId:        "user_id",
-	Date:          "date",
-	FromAccountId: "from_account_id",
-	ToAccountId:   "to_account_id",
-	Amount:        "amount",
-	Currency:      "currency",
-	Note:          "note",
-	Type:          "type",
-	CreatedAt:     "created_at",
-	UpdatedAt:     "updated_at",
-	DeletedAt:     "deleted_at",
+	Id:             "id",
+	UserId:         "user_id",
+	Date:           "date",
+	FromAccountId:  "from_account_id",
+	ToAccountId:    "to_account_id",
+	CurrencyCode:   "currency_code",
+	BalanceUnits:   "balance_units",
+	BalanceNanos:   "balance_nanos",
+	BalanceDecimal: "balance_decimal",
+	Note:           "note",
+	Type:           "type",
+	CreatedAt:      "created_at",
+	UpdatedAt:      "updated_at",
+	DeletedAt:      "deleted_at",
 }
 
 // NewTransactionsDao creates and returns a new DAO object for table data access.

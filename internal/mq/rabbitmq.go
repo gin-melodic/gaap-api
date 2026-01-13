@@ -14,7 +14,7 @@ import (
 
 // Message represents a message to be published or consumed
 type Message struct {
-	Type    string          `json:"type"`
+	Type    int             `json:"type"`
 	Payload json.RawMessage `json:"payload"`
 }
 
@@ -189,7 +189,7 @@ func (r *RabbitMQ) Publish(ctx context.Context, queue string, msg *Message) erro
 		return fmt.Errorf("failed to publish message: %w", err)
 	}
 
-	g.Log().Debugf(ctx, "Published message to queue %s: %s", queue, msg.Type)
+	g.Log().Debugf(ctx, "Published message to queue %s: %d", queue, msg.Type)
 	return nil
 }
 

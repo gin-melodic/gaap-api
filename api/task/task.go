@@ -11,8 +11,8 @@ import (
 )
 
 type ITaskV1 interface {
-	ListTasks(ctx context.Context, req *v1.ListTasksReq) (res *v1.ListTasksRes, err error)
-	GetTask(ctx context.Context, req *v1.GetTaskReq) (res *v1.GetTaskRes, err error)
-	CancelTask(ctx context.Context, req *v1.CancelTaskReq) (res *v1.CancelTaskRes, err error)
-	RetryTask(ctx context.Context, req *v1.RetryTaskReq) (res *v1.RetryTaskRes, err error)
+	GfListTasks(ctx context.Context, req *v1.GfListTasksReq) (res *v1.GfListTasksRes, err error)
+	GfGetTask(ctx context.Context, req *v1.GfGetTaskReq) (res *v1.GfGetTaskRes, err error)
+	GfCancelTask(ctx context.Context, req *v1.GfCancelTaskReq) (res *v1.GfCancelTaskRes, err error)
+	GfRetryTask(ctx context.Context, req *v1.GfRetryTaskReq) (res *v1.GfRetryTaskRes, err error)
 }

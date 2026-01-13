@@ -1,5 +1,5 @@
 // ==========================================================================
-// Code generated and maintained by GoFrame CLI tool. DO NOT EDIT.
+// Code generated and maintained by GoFrame CLI tool. DO NOT EDIT. Created at 2026-01-08 17:02:34
 // ==========================================================================
 
 package internal
@@ -27,8 +27,10 @@ type AccountsColumns struct {
 	Name           string //
 	Type           string //
 	IsGroup        string //
-	Balance        string //
-	Currency       string //
+	CurrencyCode   string //
+	BalanceUnits   string //
+	BalanceNanos   string //
+	BalanceDecimal string //
 	DefaultChildId string //
 	Date           string //
 	Number         string //
@@ -46,8 +48,10 @@ var accountsColumns = AccountsColumns{
 	Name:           "name",
 	Type:           "type",
 	IsGroup:        "is_group",
-	Balance:        "balance",
-	Currency:       "currency",
+	CurrencyCode:   "currency_code",
+	BalanceUnits:   "balance_units",
+	BalanceNanos:   "balance_nanos",
+	BalanceDecimal: "balance_decimal",
 	DefaultChildId: "default_child_id",
 	Date:           "date",
 	Number:         "number",

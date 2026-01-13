@@ -3,3 +3,29 @@
 // =================================================================================
 
 package data
+
+import (
+	"context"
+
+	v1 "gaap-api/api/data/v1"
+	"gaap-api/internal/middleware"
+
+	"github.com/gogf/gf/v2/frame/g"
+	"github.com/google/uuid"
+)
+
+// requireUserIdFromContext extracts user ID from context, panics if not found
+func requireUserIdFromContext(ctx context.Context) uuid.UUID {
+	id, ok := ctx.Value(middleware.UserIdKey).(string)
+	if !ok || id == "" {
+		g.Log().Panicf(ctx, "user id not found in context")
+	}
+	parsedId, err := uuid.Parse(id)
+	if err != nil {
+		g.Log().Panicf(ctx, "invalid user id format: %s", id)
+	}
+	return parsedId
+}
+
+// taskToProto is a placeholder for task conversion (will be handled by task controller)
+var _ = v1.ExportDataRes{}

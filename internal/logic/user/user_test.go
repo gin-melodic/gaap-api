@@ -12,6 +12,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gogf/gf/v2/test/gtest"
+	"github.com/google/uuid"
 )
 
 func Test_User_Suite(t *testing.T) {
@@ -70,7 +71,7 @@ func Test_User_Suite(t *testing.T) {
 		}
 		// 3. UpdateThemePreference
 		inTheme := model.Theme{
-			Id:   "theme_1",
+			Id:   uuid.New(),
 			Name: "dark",
 		}
 
@@ -80,7 +81,7 @@ func Test_User_Suite(t *testing.T) {
 
 		// Verify theme query
 		rows = sqlmock.NewRows([]string{"id", "name", "is_dark", "colors", "created_at", "updated_at", "deleted_at"}).
-			AddRow("theme_1", "dark", true, "{}", "2023-01-01", "2023-01-01", nil)
+			AddRow(uuid.New(), "dark", true, "{}", "2023-01-01", "2023-01-01", nil)
 
 		mock.ExpectQuery("SELECT .* FROM \"?themes\"?").
 			WithArgs(inTheme.Id).
@@ -97,6 +98,6 @@ func Test_User_Suite(t *testing.T) {
 		outTheme, err := service.User().UpdateThemePreference(ctx, inTheme)
 		g.AssertNil(err)
 		g.Assert(outTheme.Name, "dark")
-		g.Assert(outTheme.Id, "theme_1")
+		g.Assert(outTheme.Id, uuid.New())
 	})
 }

@@ -1,60 +1,54 @@
 package model
 
-import "github.com/gogf/gf/v2/os/gtime"
+import "github.com/google/uuid"
 
 // Task status constants
+type TaskStatus = int
+
 const (
-	TaskStatusPending   = "PENDING"
-	TaskStatusRunning   = "RUNNING"
-	TaskStatusCompleted = "COMPLETED"
-	TaskStatusFailed    = "FAILED"
-	TaskStatusCancelled = "CANCELLED"
+	TaskStatusUnspecified TaskStatus = iota
+	TaskStatusPending
+	TaskStatusRunning
+	TaskStatusCompleted
+	TaskStatusFailed
+	TaskStatusCancelled
 )
 
 // Task type constants
-const (
-	TaskTypeAccountMigration = "ACCOUNT_MIGRATION"
-	TaskTypeDataExport       = "DATA_EXPORT"
-	TaskTypeDataImport       = "DATA_IMPORT"
-)
+type TaskType = int
 
-// Task represents a background task
-type Task struct {
-	Id             string      `json:"id"`
-	UserId         string      `json:"userId"`
-	Type           string      `json:"type"`
-	Status         string      `json:"status"`
-	Payload        interface{} `json:"payload"`
-	Result         interface{} `json:"result,omitempty"`
-	Progress       int         `json:"progress"`
-	TotalItems     int         `json:"totalItems"`
-	ProcessedItems int         `json:"processedItems"`
-	StartedAt      *gtime.Time `json:"startedAt,omitempty"`
-	CompletedAt    *gtime.Time `json:"completedAt,omitempty"`
-	CreatedAt      *gtime.Time `json:"createdAt"`
-	UpdatedAt      *gtime.Time `json:"updatedAt"`
-}
+const (
+	TaskTypeUnspecified TaskType = iota
+	TaskTypeAccountMigration
+	TaskTypeDataExport
+	TaskTypeDataImport
+)
 
 // TaskCreateInput for creating a new task
 type TaskCreateInput struct {
-	UserId  string      `orm:"user_id"`
-	Type    string      `orm:"type"`
+	UserId  uuid.UUID   `orm:"user_id"`
+	Type    TaskType    `orm:"type"`
 	Payload interface{} `orm:"payload"`
 }
 
 // TaskQueryInput for querying tasks
 type TaskQueryInput struct {
-	Page   int    `json:"page"`
-	Limit  int    `json:"limit"`
-	Status string `json:"status"`
-	Type   string `json:"type"`
+	Page   int        `json:"page"`
+	Limit  int        `json:"limit"`
+	Status TaskStatus `json:"status"`
+	Type   TaskType   `json:"type"`
+}
+
+type Payload struct {
+	UserId uuid.UUID `json:"userId"`
 }
 
 // AccountMigrationPayload for account migration task
 type AccountMigrationPayload struct {
-	AccountId        string            `json:"accountId"`
-	ChildAccountIds  []string          `json:"childAccountIds,omitempty"`
-	MigrationTargets map[string]string `json:"migrationTargets"` // currency -> targetAccountId
+	*Payload
+	AccountId        uuid.UUID            `json:"accountId"`
+	ChildAccountIds  []uuid.UUID          `json:"childAccountIds,omitempty"`
+	MigrationTargets map[string]uuid.UUID `json:"migrationTargets"` // currency -> targetAccountId
 }
 
 // AccountMigrationResult for account migration task result
@@ -67,7 +61,7 @@ type AccountMigrationResult struct {
 
 // DataExportPayload for data export task
 type DataExportPayload struct {
-	UserId    string `json:"userId"`
+	*Payload
 	StartDate string `json:"startDate"` // YYYY-MM-DD
 	EndDate   string `json:"endDate"`   // YYYY-MM-DD
 }
@@ -84,7 +78,7 @@ type DataExportResult struct {
 
 // DataImportPayload for data import task
 type DataImportPayload struct {
-	UserId   string `json:"userId"`
+	*Payload
 	FileName string `json:"fileName"`
 }
 
@@ -95,4 +89,21 @@ type DataImportResult struct {
 	AccountsSkipped      int    `json:"accountsSkipped"`
 	TransactionsSkipped  int    `json:"transactionsSkipped"`
 	Error                string `json:"error,omitempty"`
+}
+
+// Task model for API responses
+type Task struct {
+	Id             uuid.UUID   `json:"id"`
+	UserId         uuid.UUID   `json:"userId"`
+	Type           TaskType    `json:"type"`
+	Status         TaskStatus  `json:"status"`
+	Payload        interface{} `json:"payload"`
+	Result         interface{} `json:"result"`
+	Progress       int         `json:"progress"`
+	TotalItems     int         `json:"totalItems"`
+	ProcessedItems int         `json:"processedItems"`
+	StartedAt      interface{} `json:"startedAt"`
+	CompletedAt    interface{} `json:"completedAt"`
+	CreatedAt      interface{} `json:"createdAt"`
+	UpdatedAt      interface{} `json:"updatedAt"`
 }

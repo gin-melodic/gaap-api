@@ -4,7 +4,7 @@ type UserProfile struct {
 	Email            string
 	Nickname         string
 	Avatar           string
-	Plan             string
+	Plan             int
 	TwoFactorEnabled bool
 	MainCurrency     string
 }
@@ -12,5 +12,5 @@ type UserProfile struct {
 type UserUpdateInput struct {
 	Nickname string
 	Avatar   string
-	Plan     string
+	Plan     int
 }

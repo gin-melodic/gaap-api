@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package hello.v1;
+
+option go_package = "gaap-api/api/hello/v1;v1";
+
+import "base/base.proto";
+
+service HelloService {
+  // You first hello api
+  rpc Hello(HelloReq) returns (HelloRes);
+}
+
+message HelloReq {}
+
+message HelloRes {
+  base.BaseResponse base = 255;
+}

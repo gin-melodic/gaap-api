@@ -11,5 +11,5 @@ import (
 )
 
 type IHelloV1 interface {
-	Hello(ctx context.Context, req *v1.HelloReq) (res *v1.HelloRes, err error)
+	GfHello(ctx context.Context, req *v1.GfHelloReq) (res *v1.GfHelloRes, err error)
 }

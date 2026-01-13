@@ -1,5 +1,5 @@
 // ==========================================================================
-// Code generated and maintained by GoFrame CLI tool. DO NOT EDIT.
+// Code generated and maintained by GoFrame CLI tool. DO NOT EDIT. Created at 2026-01-08 17:02:34
 // ==========================================================================
 
 package internal
@@ -21,19 +21,19 @@ type TasksDao struct {
 
 // TasksColumns defines and stores column names for the table tasks.
 type TasksColumns struct {
-	Id             string
-	UserId         string
-	Type           string
-	Status         string
-	Payload        string
-	Result         string
-	Progress       string
-	TotalItems     string
-	ProcessedItems string
-	StartedAt      string
-	CompletedAt    string
-	CreatedAt      string
-	UpdatedAt      string
+	Id             string //
+	UserId         string //
+	Type           string //
+	Status         string //
+	Payload        string //
+	Result         string //
+	Progress       string //
+	TotalItems     string //
+	ProcessedItems string //
+	StartedAt      string //
+	CompletedAt    string //
+	CreatedAt      string //
+	UpdatedAt      string //
 }
 
 // tasksColumns holds the columns for the table tasks.
@@ -83,7 +83,7 @@ func (dao *TasksDao) Group() string {
 	return dao.group
 }
 
-// Ctx creates and returns a Model for the current DAO.
+// Ctx creates and returns a Model for the current DAO. It automatically sets the context for the current operation.
 func (dao *TasksDao) Ctx(ctx context.Context) *gdb.Model {
 	model := dao.DB().Model(dao.table)
 	for _, handler := range dao.handlers {
@@ -93,6 +93,11 @@ func (dao *TasksDao) Ctx(ctx context.Context) *gdb.Model {
 }
 
 // Transaction wraps the transaction logic using function f.
+// It rolls back the transaction and returns the error if function f returns a non-nil error.
+// It commits the transaction and returns nil if function f returns nil.
+//
+// Note: Do not commit or roll back the transaction in function f,
+// as it is automatically handled by this function.
 func (dao *TasksDao) Transaction(ctx context.Context, f func(ctx context.Context, tx gdb.TX) error) (err error) {
 	return dao.Ctx(ctx).Transaction(ctx, f)
 }

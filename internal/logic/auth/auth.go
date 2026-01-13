@@ -3,18 +3,20 @@ package auth
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"os"
 	"strings"
 	"time"
 
 	"gaap-api/internal/dao"
+	"gaap-api/internal/logic/utils"
 	"gaap-api/internal/model"
 	"gaap-api/internal/model/entity"
 	"gaap-api/internal/service"
 
+	"github.com/gogf/gf/v2/errors/gerror"
 	"github.com/gogf/gf/v2/frame/g"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/pquerna/otp/totp"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -48,7 +50,7 @@ func getJwtSecret(ctx context.Context) []byte {
 
 func (s *sAuth) Login(ctx context.Context, in model.LoginInput) (out *model.AuthResponse, err error) {
 	if in.Email == "" || in.Password == "" { // Check if email and password are provided
-		return nil, errors.New("email and password are required")
+		return nil, gerror.New("email and password are required")
 	}
 
 	var user *entity.Users
@@ -57,27 +59,27 @@ func (s *sAuth) Login(ctx context.Context, in model.LoginInput) (out *model.Auth
 		return nil, err
 	}
 	if user == nil {
-		return nil, errors.New("invalid email or password")
+		return nil, gerror.New("invalid email or password")
 	}
 
 	// Verify password (frontend sends SHA-256 hash, stored password is bcrypt hash of SHA-256)
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(in.Password)); err != nil {
-		return nil, errors.New("invalid email or password")
+		return nil, gerror.New("invalid email or password")
 	}
 
 	// Verify 2FA if enabled
 	if user.TwoFactorEnabled {
 		if in.Code == "" {
-			return nil, errors.New("2FA code required")
+			return nil, gerror.New("2FA code required")
 		}
 		valid := totp.Validate(in.Code, user.TwoFactorSecret)
 		if !valid {
-			return nil, errors.New("invalid 2FA code")
+			return nil, gerror.New("invalid 2FA code")
 		}
 	}
 
 	// Generate Token Pair
-	accessToken, refreshToken, err := generateTokenPair(user.Id)
+	accessToken, refreshToken, err := generateTokenPair(user.Id.String())
 	if err != nil {
 		return nil, err
 	}
@@ -98,49 +100,39 @@ func (s *sAuth) Register(ctx context.Context, in model.RegisterInput) (out *mode
 		// return nil, errors.New("turnstile token required")
 	} else {
 		if !verifyTurnstile(ctx, in.CfTurnstileResponse) {
-			return nil, errors.New("invalid turnstile token")
+			return nil, gerror.New("invalid turnstile token")
 		}
 	}
 
 	// Check email
 	count, err := dao.Users.Ctx(ctx).Where("email", in.Email).Count()
 	if err != nil {
-		return nil, err
+		return nil, gerror.Wrap(err, "failed to check email")
 	}
 	if count > 0 {
-		return nil, errors.New("email already exists")
+		return nil, gerror.New("email already exists")
 	}
 
 	// Hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, err
+		return nil, gerror.Wrap(err, "failed to hash password")
 	}
 
 	// Create user
-	// Use g.Map to avoid sending empty ID, letting DB generate it
-	_, err = dao.Users.Ctx(ctx).Data(g.Map{
-		"email":    in.Email,
-		"nickname": in.Nickname,
-		"plan":     "FREE",
-		"password": string(hashedPassword),
-	}).Insert()
-	if err != nil {
-		return nil, err
+	user := &entity.Users{
+		Id:           uuid.New(),
+		Email:        in.Email,
+		Password:     string(hashedPassword),
+		MainCurrency: "USD",
 	}
-
-	// Fetch the created user to get the generated ID
-	var user *entity.Users
-	err = dao.Users.Ctx(ctx).Where("email", in.Email).Scan(&user)
+	_, err = dao.Users.Ctx(ctx).Insert(user)
 	if err != nil {
-		return nil, err
-	}
-	if user == nil {
-		return nil, errors.New("failed to create user")
+		return nil, gerror.Wrap(err, "failed to create user")
 	}
 
 	// Generate Token Pair
-	accessToken, refreshToken, err := generateTokenPair(user.Id)
+	accessToken, refreshToken, err := generateTokenPair(user.Id.String())
 	if err != nil {
 		return nil, err
 	}
@@ -155,11 +147,7 @@ func (s *sAuth) Register(ctx context.Context, in model.RegisterInput) (out *mode
 }
 
 func (s *sAuth) Generate2FA(ctx context.Context) (out *model.TwoFactorSecret, err error) {
-	// Get current user ID from context (assuming middleware sets it)
-	userId := ctx.Value("userId")
-	if userId == nil {
-		return nil, errors.New("unauthorized")
-	}
+	userId := utils.RequireUserId(ctx)
 
 	var user *entity.Users
 	err = dao.Users.Ctx(ctx).Where("id", userId).Scan(&user)
@@ -167,7 +155,7 @@ func (s *sAuth) Generate2FA(ctx context.Context) (out *model.TwoFactorSecret, er
 		return nil, err
 	}
 	if user == nil {
-		return nil, errors.New("user not found")
+		return nil, gerror.New("user not found")
 	}
 
 	key, err := totp.Generate(totp.GenerateOpts{
@@ -195,10 +183,7 @@ func (s *sAuth) Generate2FA(ctx context.Context) (out *model.TwoFactorSecret, er
 }
 
 func (s *sAuth) Enable2FA(ctx context.Context, code string) (err error) {
-	userId := ctx.Value("userId")
-	if userId == nil {
-		return errors.New("unauthorized")
-	}
+	userId := utils.RequireUserId(ctx)
 
 	var user *entity.Users
 	err = dao.Users.Ctx(ctx).Where("id", userId).Scan(&user)
@@ -207,12 +192,12 @@ func (s *sAuth) Enable2FA(ctx context.Context, code string) (err error) {
 	}
 
 	if user.TwoFactorSecret == "" {
-		return errors.New("please generate 2FA secret first")
+		return gerror.New("please generate 2FA secret first")
 	}
 
 	valid := totp.Validate(code, user.TwoFactorSecret)
 	if !valid {
-		return errors.New("invalid 2FA code")
+		return gerror.New("invalid 2FA code")
 	}
 
 	_, err = dao.Users.Ctx(ctx).Where("id", userId).Data(g.Map{
@@ -222,10 +207,7 @@ func (s *sAuth) Enable2FA(ctx context.Context, code string) (err error) {
 }
 
 func (s *sAuth) Disable2FA(ctx context.Context, code string, password string) (err error) {
-	userId := ctx.Value("userId")
-	if userId == nil {
-		return errors.New("unauthorized")
-	}
+	userId := utils.RequireUserId(ctx)
 
 	var user *entity.Users
 	err = dao.Users.Ctx(ctx).Where("id", userId).Scan(&user)
@@ -236,13 +218,13 @@ func (s *sAuth) Disable2FA(ctx context.Context, code string, password string) (e
 	// Verify password
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
 	if err != nil {
-		return errors.New("invalid password")
+		return gerror.New("invalid password")
 	}
 
 	// Verify code
 	valid := totp.Validate(code, user.TwoFactorSecret)
 	if !valid {
-		return errors.New("invalid 2FA code")
+		return gerror.New("invalid 2FA code")
 	}
 
 	_, err = dao.Users.Ctx(ctx).Where("id", userId).Data(g.Map{
@@ -263,28 +245,28 @@ func (s *sAuth) RefreshToken(ctx context.Context, refreshTokenStr string) (out *
 	})
 
 	if err != nil || !token.Valid {
-		return nil, errors.New("invalid or expired refresh token")
+		return nil, gerror.New("invalid or expired refresh token")
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		return nil, errors.New("invalid token claims")
+		return nil, gerror.New("invalid token claims")
 	}
 
 	// Verify it's a refresh token
 	tokenType, _ := claims["type"].(string)
 	if tokenType != "refresh" {
-		return nil, errors.New("invalid token type, refresh token required")
+		return nil, gerror.New("invalid token type, refresh token required")
 	}
 
 	// Check if token is blacklisted
 	if IsBlacklisted(refreshTokenStr) {
-		return nil, errors.New("token has been revoked")
+		return nil, gerror.New("token has been revoked")
 	}
 
 	userId, ok := claims["userId"].(string)
 	if !ok || userId == "" {
-		return nil, errors.New("invalid token: missing userId")
+		return nil, gerror.New("invalid token: missing userId")
 	}
 
 	// Generate new token pair
