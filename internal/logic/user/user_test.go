@@ -18,7 +18,8 @@ import (
 func Test_User_Suite(t *testing.T) {
 	gtest.C(t, func(g *gtest.T) {
 		mock, _ := testutil.InitMockDB(t)
-		ctx := context.WithValue(context.Background(), middleware.UserIdKey, "1")
+		userId := uuid.New().String()
+		ctx := context.WithValue(context.Background(), middleware.UserIdKey, userId)
 
 		// Mock version check once for the suite
 		testutil.MockDBInit(mock)
@@ -30,7 +31,7 @@ func Test_User_Suite(t *testing.T) {
 
 		// It selects from users table.
 		rows := sqlmock.NewRows([]string{"id", "email", "nickname", "avatar", "plan", "created_at", "updated_at", "deleted_at"}).
-			AddRow("1", "test@example.com", "Test User", "", "FREE", "2023-01-01", "2023-01-01", nil)
+			AddRow(userId, "test@example.com", "Test User", "", 0, "2023-01-01", "2023-01-01", nil)
 
 		mock.ExpectQuery("SELECT .* FROM \"?users\"?").WillReturnRows(rows)
 
@@ -48,15 +49,15 @@ func Test_User_Suite(t *testing.T) {
 		// Note: gdb has already cached users metadata from step 1, no need for MockMeta again
 
 		// It updates users table.
-		// gdb updates nickname, avatar, plan, updated_at + WHERE id = 1 (5 args)
+		// gdb updates nickname, avatar, plan, updated_at + WHERE id = userId (5 args)
 		mock.ExpectExec("UPDATE \"?users\"? SET").
 			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
 		// Then it calls GetUserProfile to return updated profile
-		// GetUserProfile now uses WHERE id = 1 (1 arg)
+		// GetUserProfile now uses WHERE id = userId (1 arg)
 		rows = sqlmock.NewRows([]string{"id", "email", "nickname", "avatar", "plan", "created_at", "updated_at", "deleted_at"}).
-			AddRow("1", "test@example.com", "Test User", "", "FREE", "2023-01-01", "2023-01-01", nil)
+			AddRow(userId, "test@example.com", "Test User", "", 0, "2023-01-01", "2023-01-01", nil)
 		mock.ExpectQuery("SELECT .* FROM \"?users\"?").
 			WithArgs(sqlmock.AnyArg()).
 			WillReturnRows(rows)
@@ -81,7 +82,7 @@ func Test_User_Suite(t *testing.T) {
 
 		// Verify theme query
 		rows = sqlmock.NewRows([]string{"id", "name", "is_dark", "colors", "created_at", "updated_at", "deleted_at"}).
-			AddRow(uuid.New(), "dark", true, "{}", "2023-01-01", "2023-01-01", nil)
+			AddRow(inTheme.Id.String(), "dark", true, "{}", "2023-01-01", "2023-01-01", nil)
 
 		mock.ExpectQuery("SELECT .* FROM \"?themes\"?").
 			WithArgs(inTheme.Id).
@@ -92,12 +93,12 @@ func Test_User_Suite(t *testing.T) {
 
 		// verify users update
 		mock.ExpectExec("UPDATE \"?users\"? SET").
-			WithArgs(inTheme.Id, sqlmock.AnyArg(), sqlmock.AnyArg()). // theme_id, updated_at, id
+			WithArgs(inTheme.Id, sqlmock.AnyArg(), userId). // theme_id, updated_at, id
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
 		outTheme, err := service.User().UpdateThemePreference(ctx, inTheme)
 		g.AssertNil(err)
 		g.Assert(outTheme.Name, "dark")
-		g.Assert(outTheme.Id, uuid.New())
+		g.Assert(outTheme.Id, inTheme.Id)
 	})
 }

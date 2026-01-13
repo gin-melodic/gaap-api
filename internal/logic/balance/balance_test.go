@@ -107,15 +107,3 @@ func Test_Precision_AccumulatedRoundingError(t *testing.T) {
 		g.Assert(total.Equal(decimal.NewFromInt(10)), true)
 	})
 }
-
-/*
-// The following tests are commented out because they depend on old model structures
-
-// Test_TransactionTypes_AreCorrect verifies transaction type constants are correct.
-func Test_TransactionTypes_AreCorrect(t *testing.T) { ... }
-
-// Test_TransactionCreateInput_Structure verifies the input structure is correct.
-func Test_TransactionCreateInput_Structure(t *testing.T) { ... }
-
-// Test_BalanceCalculation_* tests are commented out as they depend on old model structures
-*/
