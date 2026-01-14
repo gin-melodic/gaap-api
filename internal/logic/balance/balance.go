@@ -174,14 +174,9 @@ func (s *sBalance) updateBalanceInTx(ctx context.Context, dbTx gdb.TX, accountId
 
 	// Use MoneyHelper for safe arithmetic
 	currentBalance := utils.NewFromEntity(&account)
-	deltaBalance := &utils.MoneyHelper{
-		Decimal:  currentBalance.Decimal, // Will be replaced
-		Currency: currency,
-	}
+
 	// Create delta MoneyHelper manually from units/nanos
-	deltaBalance = &utils.MoneyHelper{
-		Currency: currency,
-	}
+	var deltaBalance *utils.MoneyHelper
 	// Convert delta units/nanos to MoneyHelper
 	deltaEntity := &entity.Accounts{
 		BalanceUnits: deltaUnits,

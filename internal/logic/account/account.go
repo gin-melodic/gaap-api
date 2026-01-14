@@ -28,14 +28,6 @@ func New() *sAccount {
 	return &sAccount{}
 }
 
-// Helper to safely convert *gtime.Time to date string
-func gtimeToDateString(t *gtime.Time) string {
-	if t == nil {
-		return ""
-	}
-	return t.Format("Y-m-d")
-}
-
 func (s *sAccount) ListAccounts(ctx context.Context, in model.AccountQueryInput) (out []entity.Accounts, total int, err error) {
 	// Get userId from context for security filtering
 	userId := utils.RequireUserId(ctx)
