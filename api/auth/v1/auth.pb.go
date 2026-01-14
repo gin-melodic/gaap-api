@@ -29,6 +29,7 @@ type AuthResponse struct {
 	AccessToken   string                 `protobuf:"bytes,1,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`
 	RefreshToken  string                 `protobuf:"bytes,2,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
 	User          *v1.User               `protobuf:"bytes,3,opt,name=user,proto3" json:"user,omitempty"`
+	SessionKey    string                 `protobuf:"bytes,4,opt,name=session_key,json=sessionKey,proto3" json:"session_key,omitempty" dc:"ALE session key (hex encoded)"` // ALE session key (hex encoded)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -82,6 +83,13 @@ func (x *AuthResponse) GetUser() *v1.User {
 		return x.User
 	}
 	return nil
+}
+
+func (x *AuthResponse) GetSessionKey() string {
+	if x != nil {
+		return x.SessionKey
+	}
+	return ""
 }
 
 type LoginReq struct {
@@ -452,6 +460,7 @@ type RefreshTokenRes struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	AccessToken   string                 `protobuf:"bytes,1,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`
 	RefreshToken  string                 `protobuf:"bytes,2,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
+	SessionKey    string                 `protobuf:"bytes,3,opt,name=session_key,json=sessionKey,proto3" json:"session_key,omitempty" dc:"ALE session key (hex encoded)"` // ALE session key (hex encoded)
 	Base          *base.BaseResponse     `protobuf:"bytes,255,opt,name=base,proto3" json:"base,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -497,6 +506,13 @@ func (x *RefreshTokenRes) GetAccessToken() string {
 func (x *RefreshTokenRes) GetRefreshToken() string {
 	if x != nil {
 		return x.RefreshToken
+	}
+	return ""
+}
+
+func (x *RefreshTokenRes) GetSessionKey() string {
+	if x != nil {
+		return x.SessionKey
 	}
 	return ""
 }
@@ -836,11 +852,13 @@ var File_auth_v1_auth_proto protoreflect.FileDescriptor
 
 const file_auth_v1_auth_proto_rawDesc = "" +
 	"\n" +
-	"\x12auth/v1/auth.proto\x12\aauth.v1\x1a\x0fbase/base.proto\x1a\x12user/v1/user.proto\"y\n" +
+	"\x12auth/v1/auth.proto\x12\aauth.v1\x1a\x0fbase/base.proto\x1a\x12user/v1/user.proto\"\x9a\x01\n" +
 	"\fAuthResponse\x12!\n" +
 	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12#\n" +
 	"\rrefresh_token\x18\x02 \x01(\tR\frefreshToken\x12!\n" +
-	"\x04user\x18\x03 \x01(\v2\r.user.v1.UserR\x04user\"\x84\x01\n" +
+	"\x04user\x18\x03 \x01(\v2\r.user.v1.UserR\x04user\x12\x1f\n" +
+	"\vsession_key\x18\x04 \x01(\tR\n" +
+	"sessionKey\"\x84\x01\n" +
 	"\bLoginReq\x12\x14\n" +
 	"\x05email\x18\x01 \x01(\tR\x05email\x12\x1a\n" +
 	"\bpassword\x18\x02 \x01(\tR\bpassword\x12\x12\n" +
@@ -861,10 +879,12 @@ const file_auth_v1_auth_proto_rawDesc = "" +
 	"\tLogoutRes\x12'\n" +
 	"\x04base\x18\xff\x01 \x01(\v2\x12.base.BaseResponseR\x04base\"6\n" +
 	"\x0fRefreshTokenReq\x12#\n" +
-	"\rrefresh_token\x18\x01 \x01(\tR\frefreshToken\"\x82\x01\n" +
+	"\rrefresh_token\x18\x01 \x01(\tR\frefreshToken\"\xa3\x01\n" +
 	"\x0fRefreshTokenRes\x12!\n" +
 	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12#\n" +
-	"\rrefresh_token\x18\x02 \x01(\tR\frefreshToken\x12'\n" +
+	"\rrefresh_token\x18\x02 \x01(\tR\frefreshToken\x12\x1f\n" +
+	"\vsession_key\x18\x03 \x01(\tR\n" +
+	"sessionKey\x12'\n" +
 	"\x04base\x18\xff\x01 \x01(\v2\x12.base.BaseResponseR\x04base\";\n" +
 	"\x0fTwoFactorSecret\x12\x16\n" +
 	"\x06secret\x18\x01 \x01(\tR\x06secret\x12\x10\n" +

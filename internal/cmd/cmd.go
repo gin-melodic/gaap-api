@@ -34,19 +34,31 @@ var (
 			boot.Migrate(ctx)
 			boot.InitRabbitMQ(ctx)
 
+			// Initialize ALE (Application Layer Encryption)
+			boot.InitALE(ctx)
+
 			// Sync account balances (with Redis distributed lock)
 			boot.SyncBalances(ctx)
 
 			s := g.Server()
 
-			// Public routes (no authentication required)
+			// Public routes (no authentication, no ALE - health checks, etc.)
 			s.Group("/", func(group *ghttp.RouterGroup) {
 				group.Middleware(ghttp.MiddlewareHandlerResponse)
 				group.Bind(
 					hello.NewV1(),
 					health.NewV1(),
-					auth.NewV1(),   // Auth endpoints are public
 					config.NewV1(), // Config endpoints are public (currencies, etc.)
+				)
+			})
+
+			// Auth routes (public, with ALE using Bootstrap Key)
+			// ALE middleware is optional - requests without ALE headers pass through
+			s.Group("/", func(group *ghttp.RouterGroup) {
+				group.Middleware(ghttp.MiddlewareHandlerResponse)
+				group.Middleware(middleware.ALEMiddleware(middleware.ALEModeBootstrap))
+				group.Bind(
+					auth.NewV1(),
 				)
 			})
 
@@ -54,9 +66,10 @@ var (
 			// Note: Route is /ws because Caddy's handle_path /api/* strips the /api prefix
 			s.BindHandler("/v1/ws", ws.Handler)
 
-			// Protected routes (authentication required)
+			// Protected routes (authentication required, with ALE using Session Key)
 			s.Group("/", func(group *ghttp.RouterGroup) {
 				group.Middleware(ghttp.MiddlewareHandlerResponse)
+				group.Middleware(middleware.ALEMiddleware(middleware.ALEModeSession))
 				group.Middleware(middleware.AuthMiddleware)
 				group.Bind(
 					user.NewV1(),

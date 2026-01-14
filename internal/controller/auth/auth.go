@@ -53,6 +53,7 @@ func authResponseToProto(resp *model.AuthResponse) *v1.AuthResponse {
 		AccessToken:  resp.AccessToken,
 		RefreshToken: resp.RefreshToken,
 		User:         userEntityToProto(resp.User),
+		SessionKey:   resp.SessionKey,
 	}
 }
 

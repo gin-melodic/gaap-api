@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"gaap-api/internal/ale"
 	"gaap-api/internal/dao"
 	"gaap-api/internal/logic/utils"
 	"gaap-api/internal/model"
@@ -84,10 +85,19 @@ func (s *sAuth) Login(ctx context.Context, in model.LoginInput) (out *model.Auth
 		return nil, err
 	}
 
+	// Generate ALE session key
+	sessionKey, err := ale.GenerateAndStoreSessionKey(ctx, user.Id.String())
+	if err != nil {
+		g.Log().Warningf(ctx, "Failed to generate ALE session key: %v", err)
+		// Don't fail login if session key generation fails
+		sessionKey = ""
+	}
+
 	out = &model.AuthResponse{
 		Token:        accessToken, // Deprecated, for backward compatibility
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
+		SessionKey:   sessionKey,
 		User:         user,
 	}
 	return
@@ -137,10 +147,19 @@ func (s *sAuth) Register(ctx context.Context, in model.RegisterInput) (out *mode
 		return nil, err
 	}
 
+	// Generate ALE session key
+	sessionKey, err := ale.GenerateAndStoreSessionKey(ctx, user.Id.String())
+	if err != nil {
+		g.Log().Warningf(ctx, "Failed to generate ALE session key: %v", err)
+		// Don't fail registration if session key generation fails
+		sessionKey = ""
+	}
+
 	out = &model.AuthResponse{
 		Token:        accessToken, // Deprecated, for backward compatibility
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
+		SessionKey:   sessionKey,
 		User:         user,
 	}
 	return
@@ -279,9 +298,19 @@ func (s *sAuth) RefreshToken(ctx context.Context, refreshTokenStr string) (out *
 	exp, _ := claims["exp"].(float64)
 	AddToBlacklist(refreshTokenStr, time.Unix(int64(exp), 0))
 
+	// Refresh ALE session key TTL
+	if err := ale.RefreshSessionKeyTTL(ctx, userId); err != nil {
+		g.Log().Warningf(ctx, "Failed to refresh ALE session key TTL: %v", err)
+		// Don't fail refresh if session key TTL refresh fails
+	}
+
+	// Get current session key for the response
+	sessionKey, _ := ale.GetSessionKey(ctx, userId)
+
 	out = &model.TokenPair{
 		AccessToken:  accessToken,
 		RefreshToken: newRefreshToken,
+		SessionKey:   sessionKey,
 	}
 	return
 }

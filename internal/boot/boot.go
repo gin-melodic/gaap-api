@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"gaap-api/internal/ale"
 	"gaap-api/internal/mq"
 	"gaap-api/internal/service"
 
@@ -151,4 +152,25 @@ func InitDatabaseConfig(ctx context.Context) {
 // Most secrets are now handled via os.Getenv directly in the logic/middleware.
 func InitConfig(ctx context.Context) {
 	// Add any global config overrides here if needed
+}
+
+// InitALE initializes the Application Layer Encryption (ALE) system
+func InitALE(ctx context.Context) {
+	g.Log().Info(ctx, "Initializing ALE (Application Layer Encryption)...")
+
+	// Validate bootstrap key is configured
+	if _, err := ale.GetBootstrapKey(); err != nil {
+		g.Log().Warningf(ctx, "ALE bootstrap key not configured: %v", err)
+		g.Log().Warning(ctx, "ALE will not be available for auth endpoints until ALE_BOOTSTRAP_KEY is set")
+	} else {
+		g.Log().Info(ctx, "ALE bootstrap key validated successfully")
+	}
+
+	// Initialize Redis for ALE
+	if err := ale.InitRedis(ctx); err != nil {
+		g.Log().Warningf(ctx, "ALE Redis initialization failed: %v", err)
+		g.Log().Warning(ctx, "ALE will use in-memory storage (not recommended for production)")
+	}
+
+	g.Log().Info(ctx, "ALE initialization completed")
 }

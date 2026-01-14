@@ -34,6 +34,7 @@ message AuthResponse {
   string access_token = 1;
   string refresh_token = 2;
   user.v1.User user = 3;
+  string session_key = 4;  // ALE session key (hex encoded)
 }
 
 message LoginReq {
@@ -73,6 +74,7 @@ message RefreshTokenReq {
 message RefreshTokenRes {
   string access_token = 1;
   string refresh_token = 2;
+  string session_key = 3;  // ALE session key (hex encoded)
   base.BaseResponse base = 255;
 }
 

@@ -17,6 +17,7 @@ func (c *ControllerV1) GfRefreshToken(ctx context.Context, req *v1.GfRefreshToke
 	return &v1.RefreshTokenRes{
 		AccessToken:  tokenPair.AccessToken,
 		RefreshToken: tokenPair.RefreshToken,
+		SessionKey:   tokenPair.SessionKey,
 		Base:         &base.BaseResponse{Message: "success"},
 	}, nil
 }
