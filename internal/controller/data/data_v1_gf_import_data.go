@@ -7,11 +7,17 @@ import (
 	v1 "gaap-api/api/data/v1"
 	"gaap-api/internal/model"
 	"gaap-api/internal/service"
+	utilproto "gaap-api/utility/proto"
 
 	"github.com/gogf/gf/v2/net/ghttp"
 )
 
 func (c *ControllerV1) GfImportData(ctx context.Context, req *v1.GfImportDataReq) (res *v1.GfImportDataRes, err error) {
+	// Parse protobuf from ALE context
+	if err := utilproto.ParseFromALE(ctx, &req.ImportDataReq); err != nil {
+		return nil, err
+	}
+
 	// Get request from context to handle file upload
 	r := ghttp.RequestFromCtx(ctx)
 

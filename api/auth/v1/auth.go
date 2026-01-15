@@ -13,74 +13,65 @@ import (
 // The wrapper types embed the original Protobuf types with a "Gf" prefix
 // =============================================================================
 
-
 // GfLoginReq is the GoFrame-compatible request wrapper for Login
 type GfLoginReq struct {
-	g.Meta `path:"/auth/login" method:"POST" tags:"auth" summary:"User login"`
-	*LoginReq
+	g.Meta `path:"/v1/auth/login" method:"POST" tags:"auth" summary:"User login"`
+	LoginReq
 }
 
 // GfLoginRes is the GoFrame-compatible response wrapper for Login
 type GfLoginRes = LoginRes
 
-
 // GfRegisterReq is the GoFrame-compatible request wrapper for Register
 type GfRegisterReq struct {
-	g.Meta `path:"/auth/register" method:"POST" tags:"auth" summary:"User registration"`
-	*RegisterReq
+	g.Meta `path:"/v1/auth/register" method:"POST" tags:"auth" summary:"User registration"`
+	RegisterReq
 }
 
 // GfRegisterRes is the GoFrame-compatible response wrapper for Register
 type GfRegisterRes = RegisterRes
 
-
 // GfLogoutReq is the GoFrame-compatible request wrapper for Logout
 type GfLogoutReq struct {
-	g.Meta `path:"/auth/logout" method:"POST" tags:"auth" summary:"User logout"`
-	*LogoutReq
+	g.Meta `path:"/v1/auth/logout" method:"POST" tags:"auth" summary:"User logout"`
+	LogoutReq
 }
 
 // GfLogoutRes is the GoFrame-compatible response wrapper for Logout
 type GfLogoutRes = LogoutRes
 
-
 // GfRefreshTokenReq is the GoFrame-compatible request wrapper for RefreshToken
 type GfRefreshTokenReq struct {
-	g.Meta `path:"/auth/refresh-token" method:"POST" tags:"auth" summary:"Refresh access token"`
-	*RefreshTokenReq
+	g.Meta `path:"/v1/auth/refresh-token" method:"POST" tags:"auth" summary:"Refresh access token"`
+	RefreshTokenReq
 }
 
 // GfRefreshTokenRes is the GoFrame-compatible response wrapper for RefreshToken
 type GfRefreshTokenRes = RefreshTokenRes
 
-
 // GfGenerate2FAReq is the GoFrame-compatible request wrapper for Generate2FA
 type GfGenerate2FAReq struct {
-	g.Meta `path:"/auth/generate2-f-a" method:"POST" tags:"auth" summary:"Generate 2FA secret"`
-	*Generate2FAReq
+	g.Meta `path:"/v1/auth/generate2-f-a" method:"POST" tags:"auth" summary:"Generate 2FA secret"`
+	Generate2FAReq
 }
 
 // GfGenerate2FARes is the GoFrame-compatible response wrapper for Generate2FA
 type GfGenerate2FARes = Generate2FARes
 
-
 // GfEnable2FAReq is the GoFrame-compatible request wrapper for Enable2FA
 type GfEnable2FAReq struct {
-	g.Meta `path:"/auth/enable2-f-a" method:"POST" tags:"auth" summary:"Enable 2FA"`
-	*Enable2FAReq
+	g.Meta `path:"/v1/auth/enable2-f-a" method:"POST" tags:"auth" summary:"Enable 2FA"`
+	Enable2FAReq
 }
 
 // GfEnable2FARes is the GoFrame-compatible response wrapper for Enable2FA
 type GfEnable2FARes = Enable2FARes
 
-
 // GfDisable2FAReq is the GoFrame-compatible request wrapper for Disable2FA
 type GfDisable2FAReq struct {
-	g.Meta `path:"/auth/disable2-f-a" method:"POST" tags:"auth" summary:"Disable 2FA"`
-	*Disable2FAReq
+	g.Meta `path:"/v1/auth/disable2-f-a" method:"POST" tags:"auth" summary:"Disable 2FA"`
+	Disable2FAReq
 }
 
 // GfDisable2FARes is the GoFrame-compatible response wrapper for Disable2FA
 type GfDisable2FARes = Disable2FARes
-
-

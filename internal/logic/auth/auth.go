@@ -114,6 +114,10 @@ func (s *sAuth) Register(ctx context.Context, in model.RegisterInput) (out *mode
 		}
 	}
 
+	if in.Email == "" {
+		return nil, gerror.New("email is required")
+	}
+
 	// Check email
 	count, err := dao.Users.Ctx(ctx).Where("email", in.Email).Count()
 	if err != nil {
@@ -136,7 +140,33 @@ func (s *sAuth) Register(ctx context.Context, in model.RegisterInput) (out *mode
 		Password:     string(hashedPassword),
 		MainCurrency: "USD",
 	}
-	_, err = dao.Users.Ctx(ctx).Insert(user)
+	// Try to get a default theme
+	var theme *entity.Themes
+	if err := dao.Themes.Ctx(ctx).Limit(1).Scan(&theme); err == nil && theme != nil {
+		user.ThemeId = theme.Id
+	}
+
+	// Insert user
+	// If ThemeId is still zero (no theme found), we MUST omit it from the insert
+	// so that the database receives a NULL (which is allowed) instead of a zero UUID (which violates FK)
+	if user.ThemeId != uuid.Nil {
+		_, err = dao.Users.Ctx(ctx).Insert(user)
+	} else {
+		// Construct map to exclude theme_id (implicit NULL) or set explicit NULL
+		c := dao.Users.Columns()
+		data := g.Map{
+			c.Id:               user.Id,
+			c.Email:            user.Email,
+			c.Password:         user.Password,
+			c.MainCurrency:     user.MainCurrency,
+			c.Plan:             user.Plan,
+			c.TwoFactorEnabled: user.TwoFactorEnabled,
+			c.Nickname:         user.Nickname,
+			c.Avatar:           user.Avatar,
+			c.ThemeId:          nil,
+		}
+		_, err = dao.Users.Ctx(ctx).Data(data).Insert()
+	}
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to create user")
 	}

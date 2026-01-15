@@ -16,8 +16,8 @@ import (
 
 // GfListCurrenciesReq is the GoFrame-compatible request wrapper for ListCurrencies
 type GfListCurrenciesReq struct {
-	g.Meta `path:"/config" method:"GET" tags:"config" summary:"Get supported currencies"`
-	*ListCurrenciesReq
+	g.Meta `path:"/v1/config/list-currencies" method:"POST" tags:"config" summary:"Get supported currencies"`
+	ListCurrenciesReq
 }
 
 // GfListCurrenciesRes is the GoFrame-compatible response wrapper for ListCurrencies
@@ -26,8 +26,8 @@ type GfListCurrenciesRes = ListCurrenciesRes
 
 // GfAddCurrencyReq is the GoFrame-compatible request wrapper for AddCurrency
 type GfAddCurrencyReq struct {
-	g.Meta `path:"/config/add-currency" method:"POST" tags:"config" summary:"Add a supported currency"`
-	*AddCurrencyReq
+	g.Meta `path:"/v1/config/add-currency" method:"POST" tags:"config" summary:"Add a supported currency"`
+	AddCurrencyReq
 }
 
 // GfAddCurrencyRes is the GoFrame-compatible response wrapper for AddCurrency
@@ -36,8 +36,8 @@ type GfAddCurrencyRes = AddCurrencyRes
 
 // GfDeleteCurrencyReq is the GoFrame-compatible request wrapper for DeleteCurrency
 type GfDeleteCurrencyReq struct {
-	g.Meta `path:"/config/currency" method:"DELETE" tags:"config" summary:"Remove a supported currency"`
-	*DeleteCurrencyReq
+	g.Meta `path:"/v1/config/delete-currency" method:"POST" tags:"config" summary:"Remove a supported currency"`
+	DeleteCurrencyReq
 }
 
 // GfDeleteCurrencyRes is the GoFrame-compatible response wrapper for DeleteCurrency
@@ -46,8 +46,8 @@ type GfDeleteCurrencyRes = DeleteCurrencyRes
 
 // GfGetThemesReq is the GoFrame-compatible request wrapper for GetThemes
 type GfGetThemesReq struct {
-	g.Meta `path:"/config/themes" method:"GET" tags:"config" summary:"Get available themes"`
-	*GetThemesReq
+	g.Meta `path:"/v1/config/get-themes" method:"POST" tags:"config" summary:"Get available themes"`
+	GetThemesReq
 }
 
 // GfGetThemesRes is the GoFrame-compatible response wrapper for GetThemes
@@ -56,8 +56,8 @@ type GfGetThemesRes = GetThemesRes
 
 // GfGetAccountTypesReq is the GoFrame-compatible request wrapper for GetAccountTypes
 type GfGetAccountTypesReq struct {
-	g.Meta `path:"/config/account-types" method:"GET" tags:"config" summary:"Get account type definitions"`
-	*GetAccountTypesReq
+	g.Meta `path:"/v1/config/get-account-types" method:"POST" tags:"config" summary:"Get account type definitions"`
+	GetAccountTypesReq
 }
 
 // GfGetAccountTypesRes is the GoFrame-compatible response wrapper for GetAccountTypes

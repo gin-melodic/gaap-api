@@ -7,9 +7,15 @@ import (
 	v1 "gaap-api/api/task/v1"
 	"gaap-api/internal/model"
 	"gaap-api/internal/service"
+	utilproto "gaap-api/utility/proto"
 )
 
 func (c *ControllerV1) GfListTasks(ctx context.Context, req *v1.GfListTasksReq) (res *v1.GfListTasksRes, err error) {
+	// Parse protobuf from ALE context
+	if err := utilproto.ParseFromALE(ctx, &req.ListTasksReq); err != nil {
+		return nil, err
+	}
+
 	input := model.TaskQueryInput{
 		Page:   int(req.Query.Page),
 		Limit:  int(req.Query.Limit),

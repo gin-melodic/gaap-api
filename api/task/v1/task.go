@@ -16,8 +16,8 @@ import (
 
 // GfListTasksReq is the GoFrame-compatible request wrapper for ListTasks
 type GfListTasksReq struct {
-	g.Meta `path:"/task" method:"GET" tags:"task" summary:"List all tasks"`
-	*ListTasksReq
+	g.Meta `path:"/v1/task/list-tasks" method:"POST" tags:"task" summary:"List all tasks"`
+	ListTasksReq
 }
 
 // GfListTasksRes is the GoFrame-compatible response wrapper for ListTasks
@@ -26,8 +26,8 @@ type GfListTasksRes = ListTasksRes
 
 // GfGetTaskReq is the GoFrame-compatible request wrapper for GetTask
 type GfGetTaskReq struct {
-	g.Meta `path:"/task/:id" method:"GET" tags:"task" summary:"Get task details"`
-	*GetTaskReq
+	g.Meta `path:"/v1/task/get-task" method:"POST" tags:"task" summary:"Get task details"`
+	GetTaskReq
 }
 
 // GfGetTaskRes is the GoFrame-compatible response wrapper for GetTask
@@ -36,8 +36,8 @@ type GfGetTaskRes = GetTaskRes
 
 // GfCancelTaskReq is the GoFrame-compatible request wrapper for CancelTask
 type GfCancelTaskReq struct {
-	g.Meta `path:"/task/cancel-task" method:"POST" tags:"task" summary:"Cancel a task"`
-	*CancelTaskReq
+	g.Meta `path:"/v1/task/cancel-task" method:"POST" tags:"task" summary:"Cancel a task"`
+	CancelTaskReq
 }
 
 // GfCancelTaskRes is the GoFrame-compatible response wrapper for CancelTask
@@ -46,8 +46,8 @@ type GfCancelTaskRes = CancelTaskRes
 
 // GfRetryTaskReq is the GoFrame-compatible request wrapper for RetryTask
 type GfRetryTaskReq struct {
-	g.Meta `path:"/task/retry-task" method:"POST" tags:"task" summary:"Retry a task"`
-	*RetryTaskReq
+	g.Meta `path:"/v1/task/retry-task" method:"POST" tags:"task" summary:"Retry a task"`
+	RetryTaskReq
 }
 
 // GfRetryTaskRes is the GoFrame-compatible response wrapper for RetryTask

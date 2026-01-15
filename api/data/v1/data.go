@@ -16,8 +16,8 @@ import (
 
 // GfExportDataReq is the GoFrame-compatible request wrapper for ExportData
 type GfExportDataReq struct {
-	g.Meta `path:"/data/export-data" method:"POST" tags:"data" summary:"Create data export task"`
-	*ExportDataReq
+	g.Meta `path:"/v1/data/export-data" method:"POST" tags:"data" summary:"Create data export task"`
+	ExportDataReq
 }
 
 // GfExportDataRes is the GoFrame-compatible response wrapper for ExportData
@@ -26,8 +26,8 @@ type GfExportDataRes = ExportDataRes
 
 // GfImportDataReq is the GoFrame-compatible request wrapper for ImportData
 type GfImportDataReq struct {
-	g.Meta `path:"/data/import-data" method:"POST" tags:"data" summary:"Create data import task"`
-	*ImportDataReq
+	g.Meta `path:"/v1/data/import-data" method:"POST" tags:"data" summary:"Create data import task"`
+	ImportDataReq
 }
 
 // GfImportDataRes is the GoFrame-compatible response wrapper for ImportData
@@ -36,8 +36,8 @@ type GfImportDataRes = ImportDataRes
 
 // GfDownloadExportReq is the GoFrame-compatible request wrapper for DownloadExport
 type GfDownloadExportReq struct {
-	g.Meta `path:"/data/download-export" method:"POST" tags:"data" summary:"Note: Streaming RPC might be better for large files, but keeping simple for request/response migration"`
-	*DownloadExportReq
+	g.Meta `path:"/v1/data/download-export" method:"POST" tags:"data" summary:"Note: Streaming RPC might be better for large files, but keeping simple for request/response migration"`
+	DownloadExportReq
 }
 
 // GfDownloadExportRes is the GoFrame-compatible response wrapper for DownloadExport
@@ -46,8 +46,8 @@ type GfDownloadExportRes = DownloadExportRes
 
 // GfGetExportStatusReq is the GoFrame-compatible request wrapper for GetExportStatus
 type GfGetExportStatusReq struct {
-	g.Meta `path:"/data/export-status" method:"GET" tags:"data" summary:"Get export task status"`
-	*GetExportStatusReq
+	g.Meta `path:"/v1/data/get-export-status" method:"POST" tags:"data" summary:"Get export task status"`
+	GetExportStatusReq
 }
 
 // GfGetExportStatusRes is the GoFrame-compatible response wrapper for GetExportStatus

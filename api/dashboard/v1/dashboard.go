@@ -16,8 +16,8 @@ import (
 
 // GfGetDashboardSummaryReq is the GoFrame-compatible request wrapper for GetDashboardSummary
 type GfGetDashboardSummaryReq struct {
-	g.Meta `path:"/dashboard/dashboard-summary" method:"GET" tags:"dashboard" summary:"Get dashboard summary"`
-	*GetDashboardSummaryReq
+	g.Meta `path:"/v1/dashboard/get-dashboard-summary" method:"POST" tags:"dashboard" summary:"Get dashboard summary"`
+	GetDashboardSummaryReq
 }
 
 // GfGetDashboardSummaryRes is the GoFrame-compatible response wrapper for GetDashboardSummary
@@ -26,8 +26,8 @@ type GfGetDashboardSummaryRes = GetDashboardSummaryRes
 
 // GfGetMonthlyStatsReq is the GoFrame-compatible request wrapper for GetMonthlyStats
 type GfGetMonthlyStatsReq struct {
-	g.Meta `path:"/dashboard/monthly-stats" method:"GET" tags:"dashboard" summary:"Get monthly income and expense statistics"`
-	*GetMonthlyStatsReq
+	g.Meta `path:"/v1/dashboard/get-monthly-stats" method:"POST" tags:"dashboard" summary:"Get monthly income and expense statistics"`
+	GetMonthlyStatsReq
 }
 
 // GfGetMonthlyStatsRes is the GoFrame-compatible response wrapper for GetMonthlyStats
@@ -36,8 +36,8 @@ type GfGetMonthlyStatsRes = GetMonthlyStatsRes
 
 // GfGetBalanceTrendReq is the GoFrame-compatible request wrapper for GetBalanceTrend
 type GfGetBalanceTrendReq struct {
-	g.Meta `path:"/dashboard/balance-trend" method:"GET" tags:"dashboard" summary:"Get balance trend data"`
-	*GetBalanceTrendReq
+	g.Meta `path:"/v1/dashboard/get-balance-trend" method:"POST" tags:"dashboard" summary:"Get balance trend data"`
+	GetBalanceTrendReq
 }
 
 // GfGetBalanceTrendRes is the GoFrame-compatible response wrapper for GetBalanceTrend

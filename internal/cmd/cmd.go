@@ -14,7 +14,6 @@ import (
 	"gaap-api/internal/controller/dashboard"
 	"gaap-api/internal/controller/data"
 	"gaap-api/internal/controller/health"
-	"gaap-api/internal/controller/hello"
 	"gaap-api/internal/controller/task"
 	"gaap-api/internal/controller/transaction"
 	"gaap-api/internal/controller/user"
@@ -46,7 +45,6 @@ var (
 			s.Group("/", func(group *ghttp.RouterGroup) {
 				group.Middleware(ghttp.MiddlewareHandlerResponse)
 				group.Bind(
-					hello.NewV1(),
 					health.NewV1(),
 					config.NewV1(), // Config endpoints are public (currencies, etc.)
 				)

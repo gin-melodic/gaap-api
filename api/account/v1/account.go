@@ -16,8 +16,8 @@ import (
 
 // GfListAccountsReq is the GoFrame-compatible request wrapper for ListAccounts
 type GfListAccountsReq struct {
-	g.Meta `path:"/account" method:"GET" tags:"account" summary:"List all accounts"`
-	*ListAccountsReq
+	g.Meta `path:"/v1/account/list-accounts" method:"POST" tags:"account" summary:"List all accounts"`
+	ListAccountsReq
 }
 
 // GfListAccountsRes is the GoFrame-compatible response wrapper for ListAccounts
@@ -26,8 +26,8 @@ type GfListAccountsRes = ListAccountsRes
 
 // GfCreateAccountReq is the GoFrame-compatible request wrapper for CreateAccount
 type GfCreateAccountReq struct {
-	g.Meta `path:"/account" method:"POST" tags:"account" summary:"Create a new account"`
-	*CreateAccountReq
+	g.Meta `path:"/v1/account/create-account" method:"POST" tags:"account" summary:"Create a new account"`
+	CreateAccountReq
 }
 
 // GfCreateAccountRes is the GoFrame-compatible response wrapper for CreateAccount
@@ -36,8 +36,8 @@ type GfCreateAccountRes = CreateAccountRes
 
 // GfGetAccountReq is the GoFrame-compatible request wrapper for GetAccount
 type GfGetAccountReq struct {
-	g.Meta `path:"/account/:id" method:"GET" tags:"account" summary:"Get account details"`
-	*GetAccountReq
+	g.Meta `path:"/v1/account/get-account" method:"POST" tags:"account" summary:"Get account details"`
+	GetAccountReq
 }
 
 // GfGetAccountRes is the GoFrame-compatible response wrapper for GetAccount
@@ -46,8 +46,8 @@ type GfGetAccountRes = GetAccountRes
 
 // GfUpdateAccountReq is the GoFrame-compatible request wrapper for UpdateAccount
 type GfUpdateAccountReq struct {
-	g.Meta `path:"/account/:id" method:"PUT" tags:"account" summary:"Update account"`
-	*UpdateAccountReq
+	g.Meta `path:"/v1/account/update-account" method:"POST" tags:"account" summary:"Update account"`
+	UpdateAccountReq
 }
 
 // GfUpdateAccountRes is the GoFrame-compatible response wrapper for UpdateAccount
@@ -56,8 +56,8 @@ type GfUpdateAccountRes = UpdateAccountRes
 
 // GfDeleteAccountReq is the GoFrame-compatible request wrapper for DeleteAccount
 type GfDeleteAccountReq struct {
-	g.Meta `path:"/account/:id" method:"DELETE" tags:"account" summary:"Delete account with optional migration"`
-	*DeleteAccountReq
+	g.Meta `path:"/v1/account/delete-account" method:"POST" tags:"account" summary:"Delete account with optional migration"`
+	DeleteAccountReq
 }
 
 // GfDeleteAccountRes is the GoFrame-compatible response wrapper for DeleteAccount
@@ -66,8 +66,8 @@ type GfDeleteAccountRes = DeleteAccountRes
 
 // GfGetAccountTransactionCountReq is the GoFrame-compatible request wrapper for GetAccountTransactionCount
 type GfGetAccountTransactionCountReq struct {
-	g.Meta `path:"/account/account-transaction-count" method:"GET" tags:"account" summary:"Get transaction count for account"`
-	*GetAccountTransactionCountReq
+	g.Meta `path:"/v1/account/get-account-transaction-count" method:"POST" tags:"account" summary:"Get transaction count for account"`
+	GetAccountTransactionCountReq
 }
 
 // GfGetAccountTransactionCountRes is the GoFrame-compatible response wrapper for GetAccountTransactionCount

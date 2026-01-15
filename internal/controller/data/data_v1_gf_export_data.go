@@ -7,9 +7,15 @@ import (
 	v1 "gaap-api/api/data/v1"
 	"gaap-api/internal/model"
 	"gaap-api/internal/service"
+	utilproto "gaap-api/utility/proto"
 )
 
 func (c *ControllerV1) GfExportData(ctx context.Context, req *v1.GfExportDataReq) (res *v1.GfExportDataRes, err error) {
+	// Parse protobuf from ALE context
+	if err := utilproto.ParseFromALE(ctx, &req.ExportDataReq); err != nil {
+		return nil, err
+	}
+
 	var startDate, endDate string
 	if req.GetParams() != nil {
 		startDate = req.GetParams().GetStartDate()

@@ -6,11 +6,17 @@ import (
 	"gaap-api/api/base"
 	v1 "gaap-api/api/dashboard/v1"
 	"gaap-api/internal/service"
+	utilproto "gaap-api/utility/proto"
 
 	"github.com/google/uuid"
 )
 
 func (c *ControllerV1) GfGetBalanceTrend(ctx context.Context, req *v1.GfGetBalanceTrendReq) (res *v1.GfGetBalanceTrendRes, err error) {
+	// Parse protobuf from ALE context
+	if err := utilproto.ParseFromALE(ctx, &req.GetBalanceTrendReq); err != nil {
+		return nil, err
+	}
+
 	// Convert string account IDs to UUIDs
 	accountIds := []uuid.UUID{}
 	for _, idStr := range req.Accounts {

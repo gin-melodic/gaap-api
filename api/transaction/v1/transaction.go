@@ -16,8 +16,8 @@ import (
 
 // GfListTransactionsReq is the GoFrame-compatible request wrapper for ListTransactions
 type GfListTransactionsReq struct {
-	g.Meta `path:"/transaction" method:"GET" tags:"transaction" summary:"List transactions"`
-	*ListTransactionsReq
+	g.Meta `path:"/v1/transaction/list-transactions" method:"POST" tags:"transaction" summary:"List transactions"`
+	ListTransactionsReq
 }
 
 // GfListTransactionsRes is the GoFrame-compatible response wrapper for ListTransactions
@@ -26,8 +26,8 @@ type GfListTransactionsRes = ListTransactionsRes
 
 // GfCreateTransactionReq is the GoFrame-compatible request wrapper for CreateTransaction
 type GfCreateTransactionReq struct {
-	g.Meta `path:"/transaction" method:"POST" tags:"transaction" summary:"Create a new transaction"`
-	*CreateTransactionReq
+	g.Meta `path:"/v1/transaction/create-transaction" method:"POST" tags:"transaction" summary:"Create a new transaction"`
+	CreateTransactionReq
 }
 
 // GfCreateTransactionRes is the GoFrame-compatible response wrapper for CreateTransaction
@@ -36,8 +36,8 @@ type GfCreateTransactionRes = CreateTransactionRes
 
 // GfGetTransactionReq is the GoFrame-compatible request wrapper for GetTransaction
 type GfGetTransactionReq struct {
-	g.Meta `path:"/transaction/:id" method:"GET" tags:"transaction" summary:"Get transaction details"`
-	*GetTransactionReq
+	g.Meta `path:"/v1/transaction/get-transaction" method:"POST" tags:"transaction" summary:"Get transaction details"`
+	GetTransactionReq
 }
 
 // GfGetTransactionRes is the GoFrame-compatible response wrapper for GetTransaction
@@ -46,8 +46,8 @@ type GfGetTransactionRes = GetTransactionRes
 
 // GfUpdateTransactionReq is the GoFrame-compatible request wrapper for UpdateTransaction
 type GfUpdateTransactionReq struct {
-	g.Meta `path:"/transaction/:id" method:"PUT" tags:"transaction" summary:"Update transaction"`
-	*UpdateTransactionReq
+	g.Meta `path:"/v1/transaction/update-transaction" method:"POST" tags:"transaction" summary:"Update transaction"`
+	UpdateTransactionReq
 }
 
 // GfUpdateTransactionRes is the GoFrame-compatible response wrapper for UpdateTransaction
@@ -56,8 +56,8 @@ type GfUpdateTransactionRes = UpdateTransactionRes
 
 // GfDeleteTransactionReq is the GoFrame-compatible request wrapper for DeleteTransaction
 type GfDeleteTransactionReq struct {
-	g.Meta `path:"/transaction/:id" method:"DELETE" tags:"transaction" summary:"Delete transaction"`
-	*DeleteTransactionReq
+	g.Meta `path:"/v1/transaction/delete-transaction" method:"POST" tags:"transaction" summary:"Delete transaction"`
+	DeleteTransactionReq
 }
 
 // GfDeleteTransactionRes is the GoFrame-compatible response wrapper for DeleteTransaction

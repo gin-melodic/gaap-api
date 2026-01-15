@@ -16,8 +16,8 @@ import (
 
 // GfHealthReq is the GoFrame-compatible request wrapper for Health
 type GfHealthReq struct {
-	g.Meta `path:"/health/health" method:"POST" tags:"health" summary:"Health check"`
-	*HealthReq
+	g.Meta `path:"/v1/health" method:"GET" tags:"health" summary:"Health check"`
+	HealthReq
 }
 
 // GfHealthRes is the GoFrame-compatible response wrapper for Health

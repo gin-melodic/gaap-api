@@ -6,11 +6,17 @@ import (
 	v1 "gaap-api/api/account/v1"
 	"gaap-api/api/base"
 	"gaap-api/internal/service"
+	utilproto "gaap-api/utility/proto"
 
 	"github.com/google/uuid"
 )
 
 func (c *ControllerV1) GfDeleteAccount(ctx context.Context, req *v1.GfDeleteAccountReq) (res *v1.GfDeleteAccountRes, err error) {
+	// Parse protobuf from ALE context
+	if err := utilproto.ParseFromALE(ctx, &req.DeleteAccountReq); err != nil {
+		return nil, err
+	}
+
 	id, err := uuid.Parse(req.GetId())
 	if err != nil {
 		return nil, err

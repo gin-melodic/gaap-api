@@ -6,9 +6,15 @@ import (
 	"gaap-api/api/base"
 	v1 "gaap-api/api/config/v1"
 	"gaap-api/internal/service"
+	utilproto "gaap-api/utility/proto"
 )
 
 func (c *ControllerV1) GfListCurrencies(ctx context.Context, req *v1.GfListCurrenciesReq) (res *v1.GfListCurrenciesRes, err error) {
+	// Parse protobuf from ALE context
+	if err := utilproto.ParseFromALE(ctx, &req.ListCurrenciesReq); err != nil {
+		return nil, err
+	}
+
 	currencies, err := service.Config().ListCurrencies(ctx)
 	if err != nil {
 		return nil, err

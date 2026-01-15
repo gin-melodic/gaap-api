@@ -16,8 +16,8 @@ import (
 
 // GfGetProfileReq is the GoFrame-compatible request wrapper for GetProfile
 type GfGetProfileReq struct {
-	g.Meta `path:"/user/profile" method:"GET" tags:"user" summary:"Get current user profile"`
-	*GetUserProfileReq
+	g.Meta `path:"/v1/user/get-profile" method:"POST" tags:"user" summary:"Get current user profile"`
+	GetUserProfileReq
 }
 
 // GfGetProfileRes is the GoFrame-compatible response wrapper for GetProfile
@@ -26,8 +26,8 @@ type GfGetProfileRes = GetUserProfileRes
 
 // GfUpdateProfileReq is the GoFrame-compatible request wrapper for UpdateProfile
 type GfUpdateProfileReq struct {
-	g.Meta `path:"/user/profile" method:"PUT" tags:"user" summary:"Update user profile"`
-	*UpdateUserProfileReq
+	g.Meta `path:"/v1/user/update-profile" method:"POST" tags:"user" summary:"Update user profile"`
+	UpdateUserProfileReq
 }
 
 // GfUpdateProfileRes is the GoFrame-compatible response wrapper for UpdateProfile
@@ -36,8 +36,8 @@ type GfUpdateProfileRes = UpdateUserProfileRes
 
 // GfUpdateThemeReq is the GoFrame-compatible request wrapper for UpdateTheme
 type GfUpdateThemeReq struct {
-	g.Meta `path:"/user/theme" method:"PUT" tags:"user" summary:"Update user theme preference"`
-	*UpdateThemePreferenceReq
+	g.Meta `path:"/v1/user/update-theme" method:"POST" tags:"user" summary:"Update user theme preference"`
+	UpdateThemePreferenceReq
 }
 
 // GfUpdateThemeRes is the GoFrame-compatible response wrapper for UpdateTheme

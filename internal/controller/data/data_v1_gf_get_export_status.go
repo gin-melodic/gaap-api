@@ -8,12 +8,18 @@ import (
 	taskV1 "gaap-api/api/task/v1"
 	"gaap-api/internal/model"
 	"gaap-api/internal/service"
+	utilproto "gaap-api/utility/proto"
 
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func (c *ControllerV1) GfGetExportStatus(ctx context.Context, req *v1.GfGetExportStatusReq) (res *v1.GfGetExportStatusRes, err error) {
+	// Parse protobuf from ALE context
+	if err := utilproto.ParseFromALE(ctx, &req.GetExportStatusReq); err != nil {
+		return nil, err
+	}
+
 	taskId, err := uuid.Parse(req.GetTaskId())
 	if err != nil {
 		return nil, err

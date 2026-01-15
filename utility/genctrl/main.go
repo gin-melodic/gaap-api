@@ -196,45 +196,37 @@ func parseProtoFile(filename string) (*ProtoService, error) {
 }
 
 // inferHTTPRoute determines the HTTP method and path based on RPC method name
+// All endpoints use POST method with RPC-style paths, except health which uses GET
 func inferHTTPRoute(methodName, packageName string) (string, string) {
-	// Extract module name from package (e.g., "account.v1" -> "account")
+	// Extract module name and version from package (e.g., "account.v1" -> module="account", version="v1")
 	parts := strings.Split(packageName, ".")
 	module := parts[0]
+	version := ""
+	if len(parts) > 1 {
+		version = parts[1]
+	}
 
 	// Convert to lowercase path
-	basePath := "/" + module
+	var basePath string
+	if version != "" {
+		basePath = fmt.Sprintf("/%s/%s", version, module)
+	} else {
+		basePath = "/" + module
+	}
 
-	// Determine HTTP method based on naming convention
 	lowerName := strings.ToLower(methodName)
 
-	switch {
-	case strings.HasPrefix(lowerName, "list"):
-		return "GET", basePath
-	case strings.HasPrefix(lowerName, "get"):
-		suffix := methodName[3:]
-		if strings.EqualFold(suffix, module) {
-			return "GET", basePath + "/:id"
+	// Special case: health endpoint uses GET
+	if lowerName == "health" {
+		if version != "" {
+			return "GET", "/" + version + "/health"
 		}
-		return "GET", basePath + "/" + toKebabCase(suffix)
-	case strings.HasPrefix(lowerName, "create"):
-		return "POST", basePath
-	case strings.HasPrefix(lowerName, "update"):
-		suffix := methodName[6:]
-		if strings.EqualFold(suffix, module) {
-			return "PUT", basePath + "/:id"
-		}
-		return "PUT", basePath + "/" + toKebabCase(suffix)
-	case strings.HasPrefix(lowerName, "delete"):
-		suffix := methodName[6:]
-		if strings.EqualFold(suffix, module) {
-			return "DELETE", basePath + "/:id"
-		}
-		return "DELETE", basePath + "/" + toKebabCase(suffix)
-	default:
-		// For custom methods, use POST with method name in path
-		methodPath := toKebabCase(methodName)
-		return "POST", basePath + "/" + methodPath
+		return "GET", "/health"
 	}
+
+	// All other endpoints use POST with RPC-style path: /v1/module/method-name
+	methodPath := toKebabCase(methodName)
+	return "POST", basePath + "/" + methodPath
 }
 
 // toKebabCase converts PascalCase to kebab-case
@@ -323,7 +315,7 @@ import (
 // Gf{{.Name}}Req is the GoFrame-compatible request wrapper for {{.Name}}
 type Gf{{.Name}}Req struct {
 	g.Meta ` + "`" + `path:"{{.HTTPPath}}" method:"{{.HTTPMethod}}" tags:"{{$.ModuleName}}" summary:"{{.Summary}}"` + "`" + `
-	*{{.RequestType}}
+	{{.RequestType}}
 }
 
 // Gf{{.Name}}Res is the GoFrame-compatible response wrapper for {{.Name}}

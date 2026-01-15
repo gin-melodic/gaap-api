@@ -166,10 +166,15 @@ func ALEMiddleware(mode ALEMode) func(r *ghttp.Request) {
 			return
 		}
 
-		// Replace request body with decrypted content
+		g.Log().Debugf(ctx, "ALE Decrypted Request (%d bytes)", len(plaintext))
+
+		// Store decrypted protobuf bytes in context for controller parsing
+		// Controllers should use utility/proto.ParseFromALE() to extract the message
+		r.SetCtxVar("ale_proto_body", plaintext)
+
+		// Also replace request body for any fallback parsing needs
 		r.Request.Body = io.NopCloser(bytes.NewReader(plaintext))
 		r.Request.ContentLength = int64(len(plaintext))
-		r.Request.Header.Set("Content-Type", "application/json")
 
 		// Store the hex key in context for response encryption
 		r.SetCtxVar("ale_key", hexKey)

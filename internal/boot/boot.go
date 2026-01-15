@@ -49,7 +49,7 @@ func Migrate(ctx context.Context) {
 
 	if count == 0 {
 		g.Log().Info(ctx, "Database appears empty. Seeding test data...")
-		if err := executeSqlFile(ctx, "manifest/sql/1-test_data.sql"); err != nil {
+		if err := executeSqlFile(ctx, "manifest/sql/2025011501_init.sql"); err != nil {
 			g.Log().Fatalf(ctx, "Failed to seed test data: %v", err)
 		}
 		g.Log().Info(ctx, "Test data seeding completed.")

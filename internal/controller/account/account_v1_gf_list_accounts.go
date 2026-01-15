@@ -6,9 +6,15 @@ import (
 	v1 "gaap-api/api/account/v1"
 	"gaap-api/api/base"
 	"gaap-api/internal/service"
+	utilproto "gaap-api/utility/proto"
 )
 
 func (c *ControllerV1) GfListAccounts(ctx context.Context, req *v1.GfListAccountsReq) (res *v1.GfListAccountsRes, err error) {
+	// Parse protobuf from ALE context
+	if err := utilproto.ParseFromALE(ctx, &req.ListAccountsReq); err != nil {
+		return nil, err
+	}
+
 	queryInput := protoQueryToInput(req.GetQuery())
 
 	accounts, total, err := service.Account().ListAccounts(ctx, queryInput)
