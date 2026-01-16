@@ -81,20 +81,25 @@ func GenerateAndStoreSessionKey(ctx context.Context, userId string) (string, err
 func GetSessionKey(ctx context.Context, userId string) (string, error) {
 	if redisClient == nil {
 		// Fallback: get from memory
+		g.Log().Debugf(ctx, "GetSessionKey: Redis client is nil, using in-memory storage for user %s", userId)
 		return getSessionKeyFromMemory(userId)
 	}
 
 	key := SessionKeyPrefix + userId
+	g.Log().Debugf(ctx, "GetSessionKey: Using Redis for user %s, key=%s", userId, key)
 	result, err := redisClient.Do(ctx, "GET", key)
 	if err != nil {
+		g.Log().Warningf(ctx, "GetSessionKey: Redis GET failed for user %s: %v", userId, err)
 		return "", fmt.Errorf("failed to get session key from Redis: %w", err)
 	}
 
 	sessionKey := result.String()
 	if sessionKey == "" {
+		g.Log().Debugf(ctx, "GetSessionKey: Session key not found in Redis for user %s", userId)
 		return "", fmt.Errorf("session key not found for user %s", userId)
 	}
 
+	g.Log().Debugf(ctx, "GetSessionKey: Found session key in Redis for user %s (length=%d)", userId, len(sessionKey))
 	return sessionKey, nil
 }
 

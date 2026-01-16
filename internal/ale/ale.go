@@ -51,24 +51,29 @@ func InitRedis(ctx context.Context) error {
 	}
 	password := os.Getenv("REDIS_PASSWORD")
 
+	address := fmt.Sprintf("%s:%s", host, port)
+	g.Log().Infof(ctx, "ALE InitRedis: Connecting to Redis at %s (password set: %v)", address, password != "")
+
 	config := &gredis.Config{
-		Address: fmt.Sprintf("%s:%s", host, port),
+		Address: address,
 		Pass:    password,
 		Db:      1, // Use db 1 for ALE data (separate from locks in db 0)
 	}
 
 	redis, err := gredis.New(config)
 	if err != nil {
+		g.Log().Errorf(ctx, "ALE InitRedis: Failed to create Redis client: %v", err)
 		return fmt.Errorf("failed to create Redis client for ALE: %w", err)
 	}
 
 	// Test connection
 	if _, err := redis.Do(ctx, "PING"); err != nil {
+		g.Log().Errorf(ctx, "ALE InitRedis: PING failed: %v", err)
 		return fmt.Errorf("failed to connect to Redis for ALE: %w", err)
 	}
 
 	redisClient = redis
-	g.Log().Info(ctx, "ALE Redis client initialized successfully")
+	g.Log().Info(ctx, "ALE Redis client initialized successfully (using db 1)")
 	return nil
 }
 

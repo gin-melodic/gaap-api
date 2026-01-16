@@ -53,7 +53,7 @@ var (
 			// Auth routes (public, with ALE using Bootstrap Key)
 			// ALE middleware is optional - requests without ALE headers pass through
 			s.Group("/", func(group *ghttp.RouterGroup) {
-				group.Middleware(ghttp.MiddlewareHandlerResponse)
+				group.Middleware(middleware.ALEResponseMiddleware)
 				group.Middleware(middleware.ALEMiddleware(middleware.ALEModeBootstrap))
 				group.Bind(
 					auth.NewV1(),
@@ -66,7 +66,7 @@ var (
 
 			// Protected routes (authentication required, with ALE using Session Key)
 			s.Group("/", func(group *ghttp.RouterGroup) {
-				group.Middleware(ghttp.MiddlewareHandlerResponse)
+				group.Middleware(middleware.ALEResponseMiddleware)
 				group.Middleware(middleware.ALEMiddleware(middleware.ALEModeSession))
 				group.Middleware(middleware.AuthMiddleware)
 				group.Bind(
