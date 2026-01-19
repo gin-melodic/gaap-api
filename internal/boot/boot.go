@@ -165,12 +165,4 @@ func InitALE(ctx context.Context) {
 	} else {
 		g.Log().Info(ctx, "ALE bootstrap key validated successfully")
 	}
-
-	// Initialize Redis for ALE
-	if err := ale.InitRedis(ctx); err != nil {
-		g.Log().Warningf(ctx, "ALE Redis initialization failed: %v", err)
-		g.Log().Warning(ctx, "ALE will use in-memory storage (not recommended for production)")
-	}
-
-	g.Log().Info(ctx, "ALE initialization completed")
 }

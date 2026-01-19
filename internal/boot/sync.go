@@ -3,14 +3,13 @@ package boot
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"gaap-api/internal/dao"
 	"gaap-api/internal/logic/utils"
 	"gaap-api/internal/model/entity"
+	"gaap-api/internal/redis"
 
-	"github.com/gogf/gf/v2/database/gredis"
 	"github.com/gogf/gf/v2/errors/gerror"
 	"github.com/gogf/gf/v2/frame/g"
 	"github.com/shopspring/decimal"
@@ -58,8 +57,8 @@ func SyncBalances(ctx context.Context) {
 // acquireDistributedLock tries to acquire a Redis distributed lock.
 // Returns true if lock acquired, false otherwise.
 func acquireDistributedLock(ctx context.Context) bool {
-	redis := getRedisClient(ctx)
-	if redis == nil {
+	redisClient, err := redis.GetRedisClient(ctx, redis.RedisTypeSyncLock)
+	if err != nil {
 		g.Log().Warning(ctx, "Redis not configured. Running balance sync without distributed lock.")
 		return true // Proceed without lock if Redis not available
 	}
@@ -67,7 +66,7 @@ func acquireDistributedLock(ctx context.Context) bool {
 	// SET key value NX PX milliseconds
 	// NX: Only set if not exists
 	// PX: Expire in milliseconds
-	result, err := redis.Do(ctx, "SET", balanceSyncLockKey, balanceSyncLockValue, "NX", "PX", balanceSyncLockTimeout)
+	result, err := redisClient.Do(ctx, "SET", balanceSyncLockKey, balanceSyncLockValue, "NX", "PX", balanceSyncLockTimeout)
 	if err != nil {
 		g.Log().Warningf(ctx, "Failed to acquire Redis lock: %v. Proceeding without lock.", err)
 		return true // Proceed without lock on error
@@ -79,8 +78,9 @@ func acquireDistributedLock(ctx context.Context) bool {
 
 // releaseDistributedLock releases the Redis distributed lock.
 func releaseDistributedLock(ctx context.Context) {
-	redis := getRedisClient(ctx)
-	if redis == nil {
+	redisClient, err := redis.GetRedisClient(ctx, redis.RedisTypeSyncLock)
+	if err != nil {
+		g.Log().Warning(ctx, "Redis not configured. Running balance sync without distributed lock.")
 		return
 	}
 
@@ -93,44 +93,10 @@ func releaseDistributedLock(ctx context.Context) {
 			return 0
 		end
 	`
-	_, err := redis.Do(ctx, "EVAL", luaScript, 1, balanceSyncLockKey, balanceSyncLockValue)
+	_, err = redisClient.Do(ctx, "EVAL", luaScript, 1, balanceSyncLockKey, balanceSyncLockValue)
 	if err != nil {
 		g.Log().Warningf(ctx, "Failed to release Redis lock: %v", err)
 	}
-}
-
-// getRedisClient returns the Redis client if configured.
-func getRedisClient(ctx context.Context) *gredis.Redis {
-	host := os.Getenv("REDIS_HOST")
-	if host == "" {
-		return nil
-	}
-
-	port := os.Getenv("REDIS_PORT")
-	if port == "" {
-		port = "6379"
-	}
-	password := os.Getenv("REDIS_PASSWORD")
-
-	config := &gredis.Config{
-		Address: fmt.Sprintf("%s:%s", host, port),
-		Pass:    password,
-		Db:      0, // Use db 0 for locks
-	}
-
-	redis, err := gredis.New(config)
-	if err != nil {
-		g.Log().Warningf(ctx, "Failed to create Redis client: %v", err)
-		return nil
-	}
-
-	// Test connection
-	if _, err := redis.Do(ctx, "PING"); err != nil {
-		g.Log().Warningf(ctx, "Failed to connect to Redis: %v", err)
-		return nil
-	}
-
-	return redis
 }
 
 // performBalanceSync recalculates and updates all account balances.

@@ -166,7 +166,7 @@ func ALEMiddleware(mode ALEMode) func(r *ghttp.Request) {
 			return
 		}
 
-		g.Log().Debugf(ctx, "ALE Decrypted Request (%d bytes)", len(plaintext))
+		g.Log().Infof(ctx, "ALE Decrypted Request Content: %s", string(plaintext))
 
 		// Store decrypted protobuf bytes in context for controller parsing
 		// Controllers should use utility/proto.ParseFromALE() to extract the message

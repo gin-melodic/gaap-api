@@ -30,6 +30,7 @@ var (
 			// Run database migration and seeding
 			boot.InitConfig(ctx)
 			boot.InitDatabaseConfig(ctx)
+			boot.InitRedis(ctx)
 			boot.Migrate(ctx)
 			boot.InitRabbitMQ(ctx)
 

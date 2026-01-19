@@ -3,14 +3,13 @@ package ale
 import (
 	"context"
 	"fmt"
-	"os"
 	"strconv"
 	"sync"
 	"time"
 
 	"gaap-api/internal/crypto"
+	"gaap-api/internal/redis"
 
-	"github.com/gogf/gf/v2/database/gredis"
 	"github.com/gogf/gf/v2/frame/g"
 )
 
@@ -23,10 +22,6 @@ const (
 	TimestampTolerance = 5 * time.Minute
 )
 
-var (
-	redisClient *gredis.Redis
-)
-
 // ---------------------------------------------------------
 // In-memory nonce storage fallback (for development only)
 // ---------------------------------------------------------
@@ -37,50 +32,11 @@ var (
 	nonceCleanupStarted bool
 )
 
-// InitRedis initializes the Redis client for ALE operations
-func InitRedis(ctx context.Context) error {
-	host := os.Getenv("REDIS_HOST")
-	if host == "" {
-		g.Log().Warning(ctx, "REDIS_HOST not set, ALE nonce storage will use in-memory fallback")
-		return nil
-	}
-
-	port := os.Getenv("REDIS_PORT")
-	if port == "" {
-		port = "6379"
-	}
-	password := os.Getenv("REDIS_PASSWORD")
-
-	address := fmt.Sprintf("%s:%s", host, port)
-	g.Log().Infof(ctx, "ALE InitRedis: Connecting to Redis at %s (password set: %v)", address, password != "")
-
-	config := &gredis.Config{
-		Address: address,
-		Pass:    password,
-		Db:      1, // Use db 1 for ALE data (separate from locks in db 0)
-	}
-
-	redis, err := gredis.New(config)
-	if err != nil {
-		g.Log().Errorf(ctx, "ALE InitRedis: Failed to create Redis client: %v", err)
-		return fmt.Errorf("failed to create Redis client for ALE: %w", err)
-	}
-
-	// Test connection
-	if _, err := redis.Do(ctx, "PING"); err != nil {
-		g.Log().Errorf(ctx, "ALE InitRedis: PING failed: %v", err)
-		return fmt.Errorf("failed to connect to Redis for ALE: %w", err)
-	}
-
-	redisClient = redis
-	g.Log().Info(ctx, "ALE Redis client initialized successfully (using db 1)")
-	return nil
-}
-
 // CheckAndStoreNonce atomically checks if a nonce exists and stores it if not
 // Returns true if nonce was successfully stored (not a replay)
 // Returns false if nonce already exists (replay attack)
 func CheckAndStoreNonce(ctx context.Context, nonce string) (bool, error) {
+	redisClient, _ := redis.GetRedisClient(ctx, redis.RedisTypeAle)
 	if redisClient == nil {
 		// Fallback: In-memory storage (not recommended for production)
 		return checkAndStoreNonceInMemory(nonce), nil

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"gaap-api/internal/crypto"
+	"gaap-api/internal/redis"
 
 	"github.com/gogf/gf/v2/frame/g"
 )
@@ -52,6 +53,7 @@ func GetBootstrapKey() (string, error) {
 // GenerateAndStoreSessionKey generates a new session key for a user and stores it in Redis
 // Returns the session key as hex string
 func GenerateAndStoreSessionKey(ctx context.Context, userId string) (string, error) {
+	redisClient, _ := redis.GetRedisClient(ctx, redis.RedisTypeAle)
 	sessionKey, err := crypto.GenerateSessionKey()
 	if err != nil {
 		return "", fmt.Errorf("failed to generate session key: %w", err)
@@ -79,6 +81,7 @@ func GenerateAndStoreSessionKey(ctx context.Context, userId string) (string, err
 
 // GetSessionKey retrieves the session key for a user from Redis
 func GetSessionKey(ctx context.Context, userId string) (string, error) {
+	redisClient, _ := redis.GetRedisClient(ctx, redis.RedisTypeAle)
 	if redisClient == nil {
 		// Fallback: get from memory
 		g.Log().Debugf(ctx, "GetSessionKey: Redis client is nil, using in-memory storage for user %s", userId)
@@ -105,6 +108,7 @@ func GetSessionKey(ctx context.Context, userId string) (string, error) {
 
 // InvalidateSessionKey removes the session key for a user (on logout)
 func InvalidateSessionKey(ctx context.Context, userId string) error {
+	redisClient, _ := redis.GetRedisClient(ctx, redis.RedisTypeAle)
 	if redisClient == nil {
 		// Fallback: remove from memory
 		removeSessionKeyFromMemory(userId)
@@ -123,6 +127,7 @@ func InvalidateSessionKey(ctx context.Context, userId string) error {
 
 // RefreshSessionKeyTTL extends the TTL of a session key (called on token refresh)
 func RefreshSessionKeyTTL(ctx context.Context, userId string) error {
+	redisClient, _ := redis.GetRedisClient(ctx, redis.RedisTypeAle)
 	if redisClient == nil {
 		// Memory storage doesn't have TTL, skip
 		return nil
