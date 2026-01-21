@@ -32,12 +32,39 @@ func New() *sAuth {
 	return &sAuth{}
 }
 
-const (
-	// AccessTokenExpiry is the expiration time for access tokens (15 minutes)
-	AccessTokenExpiry = 15 * time.Minute
-	// RefreshTokenExpiry is the expiration time for refresh tokens (7 days)
-	RefreshTokenExpiry = 7 * 24 * time.Hour
-)
+// getAccessTokenExpiry returns the access token expiration time from environment variables or configuration
+func getAccessTokenExpiry(ctx context.Context) time.Duration {
+	// Try env first
+	if val := os.Getenv("JWT_ACCESS_TOKEN_EXPIRY"); val != "" {
+		if d, err := time.ParseDuration(val); err == nil {
+			return d
+		}
+	}
+	// Try config
+	if v, err := g.Cfg().Get(ctx, "jwt.accessTokenExpiry"); err == nil && !v.IsEmpty() {
+		if d, err := time.ParseDuration(v.String()); err == nil {
+			return d
+		}
+	}
+	return 15 * time.Minute
+}
+
+// getRefreshTokenExpiry returns the refresh token expiration time from environment variables or configuration
+func getRefreshTokenExpiry(ctx context.Context) time.Duration {
+	// Try env first
+	if val := os.Getenv("JWT_REFRESH_TOKEN_EXPIRY"); val != "" {
+		if d, err := time.ParseDuration(val); err == nil {
+			return d
+		}
+	}
+	// Try config
+	if v, err := g.Cfg().Get(ctx, "jwt.refreshTokenExpiry"); err == nil && !v.IsEmpty() {
+		if d, err := time.ParseDuration(v.String()); err == nil {
+			return d
+		}
+	}
+	return 7 * 24 * time.Hour
+}
 
 // getJwtSecret returns the JWT secret from environment variables or configuration
 func getJwtSecret(ctx context.Context) []byte {
@@ -80,7 +107,7 @@ func (s *sAuth) Login(ctx context.Context, in model.LoginInput) (out *model.Auth
 	}
 
 	// Generate Token Pair
-	accessToken, refreshToken, err := generateTokenPair(user.Id.String())
+	accessToken, refreshToken, err := generateTokenPair(ctx, user.Id.String())
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +199,7 @@ func (s *sAuth) Register(ctx context.Context, in model.RegisterInput) (out *mode
 	}
 
 	// Generate Token Pair
-	accessToken, refreshToken, err := generateTokenPair(user.Id.String())
+	accessToken, refreshToken, err := generateTokenPair(ctx, user.Id.String())
 	if err != nil {
 		return nil, err
 	}
@@ -318,8 +345,7 @@ func (s *sAuth) RefreshToken(ctx context.Context, refreshTokenStr string) (out *
 		return nil, gerror.New("invalid token: missing userId")
 	}
 
-	// Generate new token pair
-	accessToken, newRefreshToken, err := generateTokenPair(userId)
+	accessToken, newRefreshToken, err := generateTokenPair(ctx, userId)
 	if err != nil {
 		return nil, err
 	}
@@ -366,7 +392,7 @@ func (s *sAuth) AddTokenToBlacklist(ctx context.Context, tokenStr string) {
 
 	// Default expiration if we couldn't parse it
 	if expTime.IsZero() {
-		expTime = time.Now().Add(RefreshTokenExpiry)
+		expTime = time.Now().Add(getRefreshTokenExpiry(ctx))
 	}
 
 	AddToBlacklist(tokenStr, expTime)
@@ -378,14 +404,14 @@ func (s *sAuth) IsTokenBlacklisted(ctx context.Context, token string) bool {
 }
 
 // generateTokenPair generates an access token and refresh token for a user
-func generateTokenPair(userId string) (accessToken, refreshToken string, err error) {
+func generateTokenPair(ctx context.Context, userId string) (accessToken, refreshToken string, err error) {
 	// Access Token (short-lived)
 	accessClaims := jwt.MapClaims{
 		"userId": userId,
 		"type":   "access",
-		"exp":    time.Now().Add(AccessTokenExpiry).Unix(),
+		"exp":    time.Now().Add(getAccessTokenExpiry(ctx)).Unix(),
 	}
-	accessToken, err = jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims).SignedString(getJwtSecret(context.Background()))
+	accessToken, err = jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims).SignedString(getJwtSecret(ctx))
 	if err != nil {
 		return "", "", err
 	}
@@ -394,9 +420,9 @@ func generateTokenPair(userId string) (accessToken, refreshToken string, err err
 	refreshClaims := jwt.MapClaims{
 		"userId": userId,
 		"type":   "refresh",
-		"exp":    time.Now().Add(RefreshTokenExpiry).Unix(),
+		"exp":    time.Now().Add(getRefreshTokenExpiry(ctx)).Unix(),
 	}
-	refreshToken, err = jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims).SignedString(getJwtSecret(context.Background()))
+	refreshToken, err = jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims).SignedString(getJwtSecret(ctx))
 	if err != nil {
 		return "", "", err
 	}

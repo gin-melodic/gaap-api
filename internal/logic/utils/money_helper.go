@@ -29,6 +29,14 @@ func NewFromEntity(e *entity.Accounts) *MoneyHelper {
 	}
 }
 
+// NewMoneyFromUnitsAndNanos create MoneyHelper from units and nanos
+func NewMoneyFromUnitsAndNanos(units int64, nanos int32, currency string) *MoneyHelper {
+	return &MoneyHelper{
+		Decimal:  decimal.NewFromInt(units).Add(decimal.New(int64(nanos), -9)),
+		Currency: currency,
+	}
+}
+
 // ToEntityValues convert MoneyHelper to entity.Account values
 func (m *MoneyHelper) ToEntityValues() (int64, int32) {
 	// get units and nanos
@@ -108,4 +116,20 @@ func (m *MoneyHelper) Equals(other *MoneyHelper) bool {
 		return false
 	}
 	return m.Decimal.Equal(other.Decimal)
+}
+
+// GreaterThan
+func (m *MoneyHelper) GreaterThan(other *MoneyHelper) bool {
+	if m.Currency != other.Currency {
+		return false
+	}
+	return m.Decimal.GreaterThan(other.Decimal)
+}
+
+// LessThan
+func (m *MoneyHelper) LessThan(other *MoneyHelper) bool {
+	if m.Currency != other.Currency {
+		return false
+	}
+	return m.Decimal.LessThan(other.Decimal)
 }

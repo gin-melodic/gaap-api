@@ -36,7 +36,8 @@ INSERT INTO account_types (type, label, color, bg, icon) VALUES
 (1, 'Assets', 'text-emerald-600', 'bg-emerald-100', 'Building2'),
 (2, 'Liabilities', 'text-red-600', 'bg-red-100', 'CreditCard'),
 (3, 'Income', 'text-blue-600', 'bg-blue-100', 'Briefcase'),
-(4, 'Expenses', 'text-orange-600', 'bg-orange-100', 'Receipt')
+(4, 'Expenses', 'text-orange-600', 'bg-orange-100', 'Receipt'),
+(5, 'Equity', 'text-purple-600', 'bg-purple-100', 'Landmark')
 ON CONFLICT (type) DO UPDATE SET
     label = EXCLUDED.label,
     color = EXCLUDED.color,

@@ -40,19 +40,19 @@ func Migrate(ctx context.Context) {
 	g.Log().Info(ctx, "Schema migration completed.")
 
 	// 2. Check if seeding is needed (check if users table is empty)
-	count, err := g.DB().Model("users").Count()
+	count, err := g.DB().Model("account_types").Count()
 	if err != nil {
 		// If table doesn't exist, it should have been created by schema.sql.
 		// If it still fails, it's a fatal error.
-		g.Log().Fatalf(ctx, "Failed to check users table: %v", err)
+		g.Log().Fatalf(ctx, "Failed to check account_types table: %v", err)
 	}
 
 	if count == 0 {
 		g.Log().Info(ctx, "Database appears empty. Seeding test data...")
 		if err := executeSqlFile(ctx, "manifest/sql/2025011501_init.sql"); err != nil {
-			g.Log().Fatalf(ctx, "Failed to seed test data: %v", err)
+			g.Log().Fatalf(ctx, "Failed to seed Init data: %v", err)
 		}
-		g.Log().Info(ctx, "Test data seeding completed.")
+		g.Log().Info(ctx, "Init data seeding completed.")
 	} else {
 		g.Log().Info(ctx, "Database already contains data. Skipping seeding.")
 	}

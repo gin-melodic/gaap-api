@@ -199,9 +199,9 @@ func (s *sBalance) updateBalanceInTx(ctx context.Context, dbTx gdb.TX, accountId
 	// Update balance using entity struct
 	_, err = dbTx.Model(dao.Accounts.Table()).
 		Where("id", accountId).
-		Data(entity.Accounts{
-			BalanceUnits: newUnits,
-			BalanceNanos: int(newNanos),
+		Data(g.Map{
+			dao.Accounts.Columns().BalanceUnits: newUnits,
+			dao.Accounts.Columns().BalanceNanos: int(newNanos),
 		}).
 		Update()
 	if err != nil {

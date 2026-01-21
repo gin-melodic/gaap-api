@@ -17,7 +17,7 @@ func (c *ControllerV1) GfCreateTransaction(ctx context.Context, req *v1.GfCreate
 
 	input := protoInputToCreateInput(ctx, req.GetInput())
 
-	tx, err := service.Transaction().CreateTransaction(ctx, input)
+	tx, err := service.Transaction().CreateTransaction(ctx, input, nil)
 	if err != nil {
 		return nil, err
 	}

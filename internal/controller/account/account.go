@@ -157,8 +157,10 @@ func protoInputToUpdateInput(input *v1.AccountInput) model.AccountUpdateInput {
 	// Handle balance (Money type)
 	if input.GetBalance() != nil {
 		result.CurrencyCode = input.GetBalance().GetCurrencyCode()
-		result.Units = input.GetBalance().GetUnits()
-		result.Nanos = int(input.GetBalance().GetNanos())
+		units := input.GetBalance().GetUnits()
+		nanos := int(input.GetBalance().GetNanos())
+		result.BalanceUnits = &units
+		result.BalanceNanos = &nanos
 	}
 
 	return result

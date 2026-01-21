@@ -37,13 +37,13 @@ func (s *sTask) ListTasks(ctx context.Context, in model.TaskQueryInput) (out []m
 
 	m := dao.Tasks.Ctx(ctx)
 	if userId != "" {
-		m = m.Where("user_id", userId)
+		m = m.Where(dao.Tasks.Columns().UserId, userId)
 	}
 	if in.Status != 0 {
-		m = m.Where("status", in.Status)
+		m = m.Where(dao.Tasks.Columns().Status, in.Status)
 	}
 	if in.Type != 0 {
-		m = m.Where("type", in.Type)
+		m = m.Where(dao.Tasks.Columns().Type, in.Type)
 	}
 
 	total, err = m.Count()
@@ -69,9 +69,9 @@ func (s *sTask) GetTask(ctx context.Context, id uuid.UUID) (out *model.Task, err
 	userId := utils.RequireUserId(ctx)
 
 	var e entity.Tasks
-	m := dao.Tasks.Ctx(ctx).Where("id", id)
+	m := dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, id)
 	if userId != "" {
-		m = m.Where("user_id", userId)
+		m = m.Where(dao.Tasks.Columns().UserId, userId)
 	}
 	err = m.Scan(&e)
 	if err != nil {
@@ -143,13 +143,13 @@ func (s *sTask) CreateTask(ctx context.Context, in model.TaskCreateInput) (out *
 func (s *sTask) CancelTask(ctx context.Context, id uuid.UUID) error {
 	userId := utils.RequireUserId(ctx)
 
-	m := dao.Tasks.Ctx(ctx).Where("id", id)
+	m := dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, id)
 	if userId != "" {
-		m = m.Where("user_id", userId)
+		m = m.Where(dao.Tasks.Columns().UserId, userId)
 	}
 
 	// Only allow cancelling pending or running tasks
-	m = m.WhereIn("status", []int{model.TaskStatusPending, model.TaskStatusRunning})
+	m = m.WhereIn(dao.Tasks.Columns().Status, []int{model.TaskStatusPending, model.TaskStatusRunning})
 
 	_, err := m.Data(entity.Tasks{
 		Status:      model.TaskStatusCancelled,
@@ -187,7 +187,7 @@ func (s *sTask) RetryTask(ctx context.Context, id uuid.UUID) (*model.Task, error
 	}
 
 	// Reset task status to pending
-	_, err = dao.Tasks.Ctx(ctx).Where("id", id).Data(entity.Tasks{
+	_, err = dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, id).Data(entity.Tasks{
 		Status:         model.TaskStatusPending,
 		Progress:       0,
 		ProcessedItems: 0,
@@ -219,7 +219,7 @@ func (s *sTask) RetryTask(ctx context.Context, id uuid.UUID) (*model.Task, error
 
 // UpdateTaskProgress updates task progress
 func (s *sTask) UpdateTaskProgress(ctx context.Context, id uuid.UUID, progress int, processedItems int) error {
-	_, err := dao.Tasks.Ctx(ctx).Where("id", id).Data(entity.Tasks{
+	_, err := dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, id).Data(entity.Tasks{
 		Progress:       progress,
 		ProcessedItems: processedItems,
 	}).Update()
@@ -232,7 +232,7 @@ func (s *sTask) UpdateTaskProgress(ctx context.Context, id uuid.UUID, progress i
 // CompleteTask marks a task as completed
 func (s *sTask) CompleteTask(ctx context.Context, id uuid.UUID, result interface{}) error {
 	resultBytes, _ := json.Marshal(result)
-	_, err := dao.Tasks.Ctx(ctx).Where("id", id).Data(entity.Tasks{
+	_, err := dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, id).Data(entity.Tasks{
 		Status:      model.TaskStatusCompleted,
 		Progress:    100,
 		Result:      string(resultBytes),
@@ -251,7 +251,7 @@ func (s *sTask) CompleteTask(ctx context.Context, id uuid.UUID, result interface
 func (s *sTask) FailTask(ctx context.Context, id uuid.UUID, errMsg string) error {
 	result := model.AccountMigrationResult{Error: errMsg}
 	resultBytes, _ := json.Marshal(result)
-	_, err := dao.Tasks.Ctx(ctx).Where("id", id).Data(entity.Tasks{
+	_, err := dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, id).Data(entity.Tasks{
 		Status:      model.TaskStatusFailed,
 		Result:      string(resultBytes),
 		CompletedAt: gtime.Now(),
@@ -321,7 +321,7 @@ func (s *sTask) processAccountMigration(ctx context.Context, payload json.RawMes
 	migrationPayload := data.Payload
 
 	// Update task status to running
-	_, err = dao.Tasks.Ctx(ctx).Where("id", taskId).Data(entity.Tasks{
+	_, err = dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, taskId).Data(entity.Tasks{
 		Status:    model.TaskStatusRunning,
 		StartedAt: gtime.Now(),
 	}).Update()
@@ -357,14 +357,14 @@ func (s *sTask) executeMigration(ctx context.Context, tx gdb.TX, taskId uuid.UUI
 	// Count total transactions to migrate
 	var totalCount int
 	for _, accId := range accountIds {
-		count, _ := tx.Model("transactions").
-			Where("from_account_id = ? OR to_account_id = ?", accId, accId).
+		count, _ := tx.Model(dao.Transactions.Table()).
+			Where(dao.Transactions.Columns().FromAccountId+" = ? OR "+dao.Transactions.Columns().ToAccountId+" = ?", accId, accId).
 			Count()
 		totalCount += count
 	}
 
 	// Update total items
-	tx.Model("tasks").Where("id", taskId).Data(g.Map{"total_items": totalCount}).Update()
+	tx.Model(dao.Tasks.Table()).Where(dao.Tasks.Columns().Id, taskId).Data(g.Map{dao.Tasks.Columns().TotalItems: totalCount}).Update()
 
 	processed := 0
 
@@ -372,7 +372,7 @@ func (s *sTask) executeMigration(ctx context.Context, tx gdb.TX, taskId uuid.UUI
 	for _, accId := range accountIds {
 		// Get account currency
 		var acc entity.Accounts
-		tx.Model("accounts").Where("id", accId).Scan(&acc)
+		tx.Model(dao.Accounts.Table()).Where(dao.Accounts.Columns().Id, accId).Scan(&acc)
 
 		targetId := payload.MigrationTargets[acc.CurrencyCode]
 		if targetId == uuid.Nil {
@@ -380,9 +380,9 @@ func (s *sTask) executeMigration(ctx context.Context, tx gdb.TX, taskId uuid.UUI
 		}
 
 		// Update from_account_id
-		fromResult, err := tx.Model("transactions").
-			Where("from_account_id", accId).
-			Data(g.Map{"from_account_id": targetId}).
+		fromResult, err := tx.Model(dao.Transactions.Table()).
+			Where(dao.Transactions.Columns().FromAccountId, accId).
+			Data(g.Map{dao.Transactions.Columns().FromAccountId: targetId}).
 			Update()
 		if err != nil {
 			return gerror.Wrap(err, "failed to update from_account_id")
@@ -391,9 +391,9 @@ func (s *sTask) executeMigration(ctx context.Context, tx gdb.TX, taskId uuid.UUI
 		result.TransactionsMigrated += int(fromCount)
 
 		// Update to_account_id
-		toResult, err := tx.Model("transactions").
-			Where("to_account_id", accId).
-			Data(g.Map{"to_account_id": targetId}).
+		toResult, err := tx.Model(dao.Transactions.Table()).
+			Where(dao.Transactions.Columns().ToAccountId, accId).
+			Data(g.Map{dao.Transactions.Columns().ToAccountId: targetId}).
 			Update()
 		if err != nil {
 			return gerror.Wrap(err, "failed to update to_account_id")
@@ -403,15 +403,16 @@ func (s *sTask) executeMigration(ctx context.Context, tx gdb.TX, taskId uuid.UUI
 
 		// Merge balance using MoneyHelper
 		var targetAcc entity.Accounts
-		tx.Model("accounts").Where("id", targetId).Scan(&targetAcc)
+		tx.Model(dao.Accounts.Table()).Where(dao.Accounts.Columns().Id, targetId).Scan(&targetAcc)
 
 		currentBalance := utils.NewFromEntity(&targetAcc)
 		deltaBalance := utils.NewFromEntity(&acc)
 		newBalance, _ := currentBalance.Add(deltaBalance)
 		if newBalance != nil {
 			newUnits, newNanos := newBalance.ToEntityValues()
-			tx.Model("accounts").
-				Where("id", targetId).
+			tx.Model(dao.Accounts.Table()).
+				Where(dao.Accounts.Columns().Id, targetId).
+				FieldsEx(dao.Accounts.Columns().BalanceDecimal).
 				Data(entity.Accounts{
 					BalanceUnits: newUnits,
 					BalanceNanos: int(newNanos),
@@ -421,9 +422,9 @@ func (s *sTask) executeMigration(ctx context.Context, tx gdb.TX, taskId uuid.UUI
 		result.BalancesMerged++
 
 		// Soft delete account
-		_, err = tx.Model("accounts").
-			Where("id", accId).
-			Data(g.Map{"deleted_at": gtime.Now()}).
+		_, err = tx.Model(dao.Accounts.Table()).
+			Where(dao.Accounts.Columns().Id, accId).
+			Data(g.Map{dao.Accounts.Columns().DeletedAt: gtime.Now()}).
 			Update()
 		if err != nil {
 			return gerror.Wrap(err, "failed to soft delete account")
@@ -436,14 +437,14 @@ func (s *sTask) executeMigration(ctx context.Context, tx gdb.TX, taskId uuid.UUI
 		if totalCount > 0 {
 			progress = (processed * 100) / totalCount
 		}
-		tx.Model("tasks").Where("id", taskId).Data(g.Map{
-			"progress":        progress,
-			"processed_items": processed,
+		tx.Model(dao.Tasks.Table()).Where(dao.Tasks.Columns().Id, taskId).Data(g.Map{
+			dao.Tasks.Columns().Progress:       progress,
+			dao.Tasks.Columns().ProcessedItems: processed,
 		}).Update()
 
 		// Check for cancellation periodically
 		var taskStatus int
-		tx.Model("tasks").Where("id", taskId).Fields("status").Scan(&taskStatus)
+		tx.Model(dao.Tasks.Table()).Where(dao.Tasks.Columns().Id, taskId).Fields(dao.Tasks.Columns().Status).Scan(&taskStatus)
 		if taskStatus == model.TaskStatusCancelled {
 			return gerror.New("task cancelled by user")
 		}
@@ -500,7 +501,7 @@ func (s *sTask) processDataExport(ctx context.Context, payload json.RawMessage) 
 	exportPayload := data.Payload
 
 	// Update task status to running
-	_, err = dao.Tasks.Ctx(ctx).Where("id", taskId).Data(entity.Tasks{
+	_, err = dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, taskId).Data(entity.Tasks{
 		Status:    model.TaskStatusRunning,
 		StartedAt: gtime.Now(),
 	}).Update()
@@ -557,7 +558,7 @@ func (s *sTask) processDataImport(ctx context.Context, payload json.RawMessage) 
 	importPayload := data.Payload
 
 	// Update task status to running
-	_, err = dao.Tasks.Ctx(ctx).Where("id", taskId).Data(entity.Tasks{
+	_, err = dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, taskId).Data(entity.Tasks{
 		Status:    model.TaskStatusRunning,
 		StartedAt: gtime.Now(),
 	}).Update()

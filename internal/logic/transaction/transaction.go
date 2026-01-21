@@ -11,6 +11,7 @@ import (
 	"github.com/gogf/gf/v2/database/gdb"
 	"github.com/gogf/gf/v2/errors/gerror"
 	"github.com/gogf/gf/v2/frame/g"
+	"github.com/gogf/gf/v2/os/gtime"
 	"github.com/google/uuid"
 )
 
@@ -30,19 +31,19 @@ func (s *sTransaction) ListTransactions(ctx context.Context, in model.Transactio
 
 	m := dao.Transactions.Ctx(ctx)
 	if userId != "" {
-		m = m.Where("user_id", userId)
+		m = m.Where(dao.Transactions.Columns().UserId, userId)
 	}
 	if in.StartDate != "" {
-		m = m.Where("date >=", in.StartDate)
+		m = m.Where(dao.Transactions.Columns().Date+" >=", in.StartDate)
 	}
 	if in.EndDate != "" {
-		m = m.Where("date <=", in.EndDate)
+		m = m.Where(dao.Transactions.Columns().Date+" <=", in.EndDate)
 	}
 	if in.AccountId != uuid.Nil {
-		m = m.Where("from_account_id = ? OR to_account_id = ?", in.AccountId, in.AccountId)
+		m = m.Where(dao.Transactions.Columns().FromAccountId+" = ? OR "+dao.Transactions.Columns().ToAccountId+" = ?", in.AccountId, in.AccountId)
 	}
 	if in.Type != 0 {
-		m = m.Where("type", in.Type)
+		m = m.Where(dao.Transactions.Columns().Type, in.Type)
 	}
 
 	// Sort
@@ -70,11 +71,18 @@ func (s *sTransaction) ListTransactions(ctx context.Context, in model.Transactio
 	return entities, total, nil
 }
 
-func (s *sTransaction) CreateTransaction(ctx context.Context, in model.TransactionCreateInput) (out *entity.Transactions, err error) {
+// CreateTransaction creates a new transaction.
+// If tx is provided, it will be used for the transaction.
+func (s *sTransaction) CreateTransaction(ctx context.Context, in model.TransactionCreateInput, tx *gdb.TX) (out *entity.Transactions, err error) {
 	// Generate UUID7 for the new transaction
 	newId, err := uuid.NewV7()
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to generate UUID7 for new transaction")
+	}
+
+	txDate := gtime.Now()
+	if in.Date != "" {
+		txDate = gtime.NewFromStr(in.Date)
 	}
 
 	txEntity := entity.Transactions{
@@ -85,33 +93,40 @@ func (s *sTransaction) CreateTransaction(ctx context.Context, in model.Transacti
 		CurrencyCode:  in.CurrencyCode,
 		BalanceUnits:  in.BalanceUnits,
 		BalanceNanos:  in.BalanceNanos,
+		Date:          txDate,
 		Note:          in.Note,
 		Type:          in.Type,
 	}
 
-	// Use database transaction to ensure atomicity
-	err = g.DB().Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
-		// 1. Insert transaction record
-		_, insertErr := tx.Model(dao.Transactions.Table()).Data(txEntity).Insert()
-		if insertErr != nil {
-			return gerror.Wrap(insertErr, "failed to insert transaction")
+	transactionTx := tx
+	if transactionTx == nil {
+		ttx, err := g.DB().Begin(ctx)
+		if err != nil {
+			return nil, gerror.Wrap(err, "failed to begin transaction")
 		}
+		transactionTx = &ttx
+	}
 
-		// 2. Apply balance changes
-		balanceErr := service.Balance().ApplyTransactionInTx(ctx, tx, &in)
-		if balanceErr != nil {
-			return gerror.Wrap(balanceErr, "failed to apply balance changes")
-		}
+	// 1. Insert transaction record
+	_, insertErr := (*transactionTx).Model(dao.Transactions.Table()).FieldsEx(dao.Transactions.Columns().BalanceDecimal, dao.Transactions.Columns().DeletedAt).Data(txEntity).Insert()
+	if insertErr != nil {
+		return nil, gerror.Wrap(insertErr, "failed to insert transaction")
+	}
 
-		return nil
-	})
-	if err != nil {
-		return nil, err
+	// 2. Apply balance changes
+	balanceErr := service.Balance().ApplyTransactionInTx(ctx, *transactionTx, &in)
+	if balanceErr != nil {
+		return nil, gerror.Wrap(balanceErr, "failed to apply balance changes")
+	}
+
+	// 3. Commit transaction if it was created by this function
+	if tx == nil {
+		(*transactionTx).Commit()
 	}
 
 	// Retrieve the created transaction
 	var e entity.Transactions
-	err = dao.Transactions.Ctx(ctx).Where("id", newId).Scan(&e)
+	err = dao.Transactions.Ctx(ctx).Where(dao.Transactions.Columns().Id, newId).Scan(&e)
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to retrieve created transaction")
 	}
@@ -123,9 +138,9 @@ func (s *sTransaction) GetTransaction(ctx context.Context, id uuid.UUID) (out *e
 	userId := utils.RequireUserId(ctx)
 
 	var e entity.Transactions
-	m := dao.Transactions.Ctx(ctx).Where("id", id)
+	m := dao.Transactions.Ctx(ctx).Where(dao.Transactions.Columns().Id, id)
 	if userId != "" {
-		m = m.Where("user_id", userId)
+		m = m.Where(dao.Transactions.Columns().UserId, userId)
 	}
 	err = m.Scan(&e)
 	if err != nil {
@@ -140,9 +155,9 @@ func (s *sTransaction) GetTransaction(ctx context.Context, id uuid.UUID) (out *e
 // getTransactionByIdInTx is an internal helper that gets a transaction by ID within a transaction.
 func (s *sTransaction) getTransactionByIdInTx(ctx context.Context, tx gdb.TX, id uuid.UUID, userId string) (*model.Transaction, error) {
 	var e entity.Transactions
-	m := tx.Model(dao.Transactions.Table()).Where("id", id)
+	m := tx.Model(dao.Transactions.Table()).Where(dao.Transactions.Columns().Id, id)
 	if userId != "" {
-		m = m.Where("user_id", userId)
+		m = m.Where(dao.Transactions.Columns().UserId, userId)
 	}
 	err := m.Scan(&e)
 	if err != nil {
@@ -185,20 +200,20 @@ func (s *sTransaction) UpdateTransaction(ctx context.Context, id uuid.UUID, in m
 		}
 
 		// 3. Update the transaction record
-		updateData := entity.Transactions{
-			FromAccountId: in.FromAccountId,
-			ToAccountId:   in.ToAccountId,
-			CurrencyCode:  in.CurrencyCode,
-			BalanceUnits:  in.BalanceUnits,
-			BalanceNanos:  in.BalanceNanos,
-			Note:          in.Note,
-			Type:          in.Type,
-		}
-		m := tx.Model(dao.Transactions.Table()).Where("id", id)
+
+		m := tx.Model(dao.Transactions.Table()).Where(dao.Transactions.Columns().Id, id)
 		if userId != "" {
-			m = m.Where("user_id", userId)
+			m = m.Where(dao.Transactions.Columns().UserId, userId)
 		}
-		_, updateErr := m.OmitEmpty().Data(updateData).Update()
+		_, updateErr := m.Data(g.Map{
+			dao.Transactions.Columns().FromAccountId: in.FromAccountId,
+			dao.Transactions.Columns().ToAccountId:   in.ToAccountId,
+			dao.Transactions.Columns().CurrencyCode:  in.CurrencyCode,
+			dao.Transactions.Columns().BalanceUnits:  in.BalanceUnits,
+			dao.Transactions.Columns().BalanceNanos:  in.BalanceNanos,
+			dao.Transactions.Columns().Note:          in.Note,
+			dao.Transactions.Columns().Type:          in.Type,
+		}).Update()
 		if updateErr != nil {
 			return gerror.Wrap(updateErr, "failed to update transaction")
 		}
@@ -252,9 +267,9 @@ func (s *sTransaction) DeleteTransaction(ctx context.Context, id uuid.UUID) (err
 		}
 
 		// 3. Delete the transaction record
-		m := tx.Model(dao.Transactions.Table()).Where("id", id)
+		m := tx.Model(dao.Transactions.Table()).Where(dao.Transactions.Columns().Id, id)
 		if userId != "" {
-			m = m.Where("user_id", userId)
+			m = m.Where(dao.Transactions.Columns().UserId, userId)
 		}
 		_, deleteErr := m.Unscoped().Delete()
 		if deleteErr != nil {

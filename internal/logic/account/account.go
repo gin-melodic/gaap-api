@@ -34,13 +34,13 @@ func (s *sAccount) ListAccounts(ctx context.Context, in model.AccountQueryInput)
 
 	m := dao.Accounts.Ctx(ctx)
 	if userId != "" {
-		m = m.Where("user_id", userId)
+		m = m.Where(dao.Accounts.Columns().UserId, userId)
 	}
 	if in.Type != 0 {
-		m = m.Where("type", in.Type)
+		m = m.Where(dao.Accounts.Columns().Type, in.Type)
 	}
 	if in.ParentId != uuid.Nil {
-		m = m.Where("parent_id", in.ParentId)
+		m = m.Where(dao.Accounts.Columns().ParentId, in.ParentId)
 	}
 	total, err = m.Count()
 	if err != nil {
@@ -89,6 +89,9 @@ func (s *sAccount) CreateAccount(ctx context.Context, in model.AccountCreateInpu
 	// Set Balance to 0 initially - balance will be updated via opening balance transaction
 	data["Units"] = 0
 	data["Nanos"] = 0
+	if initialCurrency == "" {
+		initialCurrency = "USD"
+	}
 	data["CurrencyCode"] = initialCurrency
 
 	// Generate UUID7 for the new account (since InsertAndGetId doesn't support UUID)
@@ -98,59 +101,39 @@ func (s *sAccount) CreateAccount(ctx context.Context, in model.AccountCreateInpu
 	}
 	data["Id"] = newId
 
+	// Always delete calculated fields
+	delete(data, "BalanceDecimal")
+
 	// Wrap everything in a single database transaction for atomicity
 	err = g.DB().Transaction(ctx, func(ctx context.Context, dbTx gdb.TX) error {
 		// Insert the account
 		_, err := dbTx.Model(dao.Accounts.Table()).Data(data).Insert()
 		if err != nil {
-			return gerror.Wrap(err, "failed to insert account")
+			return gerror.Wrap(err, "failed to insert initial account")
 		}
 
 		// If initial balance is non-zero, create opening balance transaction
-		if (initialUnits != 0 && initialNanos != 0) && (in.Type == utils.AccountTypeAsset || in.Type == utils.AccountTypeLiability) {
+		if (initialUnits != 0 || initialNanos != 0) && (in.Type == utils.AccountTypeAsset || in.Type == utils.AccountTypeLiability) {
 			// Get or create equity account for this currency
 			equityAccountId, err := s.getOrCreateOpeningBalanceEquityAccountInTx(ctx, dbTx, in.CurrencyCode, in.UserId)
 			if err != nil {
 				return gerror.Wrap(err, "failed to get/create equity account")
 			}
-
-			// Generate transaction ID
-			txId, err := uuid.NewV7()
-			if err != nil {
-				return err
-			}
-
-			txData := entity.Transactions{
-				Id:            txId,
+			// Create transaction
+			txData := model.TransactionCreateInput{
 				UserId:        in.UserId,
-				Date:          gtime.NewFromStr(accountDate),
+				Date:          gtime.NewFromStr(accountDate).Format("Y-m-d"),
 				FromAccountId: equityAccountId,
 				ToAccountId:   newId,
 				BalanceUnits:  initialUnits,
 				BalanceNanos:  initialNanos,
-				Note:          "Opening Balance - " + in.Name,
+				CurrencyCode:  initialCurrency,
+				Note:          fmt.Sprintf("Opening Balance - %s - %s", in.Name, in.CurrencyCode),
 				Type:          utils.TransactionTypeOpeningBalance,
 			}
-
-			_, err = dbTx.Model(dao.Transactions.Table()).Save(txData)
+			_, err = service.Transaction().CreateTransaction(ctx, txData, &dbTx)
 			if err != nil {
 				return gerror.Wrap(err, "failed to create opening balance transaction")
-			}
-
-			// Apply balance changes within the same transaction
-			txInput := &model.TransactionCreateInput{
-				UserId:        in.UserId,
-				Date:          accountDate,
-				FromAccountId: equityAccountId,
-				ToAccountId:   newId,
-				CurrencyCode:  initialCurrency,
-				BalanceUnits:  initialUnits,
-				BalanceNanos:  initialNanos,
-				Note:          "Opening Balance - " + in.Name,
-				Type:          utils.TransactionTypeOpeningBalance,
-			}
-			if err := service.Balance().ApplyTransactionInTx(ctx, dbTx, txInput); err != nil {
-				return gerror.Wrap(err, "failed to apply opening balance")
 			}
 		}
 
@@ -163,7 +146,7 @@ func (s *sAccount) CreateAccount(ctx context.Context, in model.AccountCreateInpu
 
 	// Retrieve the created account
 	var e entity.Accounts
-	err = dao.Accounts.Ctx(ctx).Where("id", newId).Scan(&e)
+	err = dao.Accounts.Ctx(ctx).Where(dao.Accounts.Columns().Id, newId).Scan(&e)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +158,7 @@ func (s *sAccount) GetAccount(ctx context.Context, id uuid.UUID) (out *entity.Ac
 	userId := utils.RequireUserId(ctx)
 
 	var e entity.Accounts
-	m := dao.Accounts.Ctx(ctx).Where("id", id).Where("user_id", userId)
+	m := dao.Accounts.Ctx(ctx).Where(dao.Accounts.Columns().Id, id).Where(dao.Accounts.Columns().UserId, userId)
 	err = m.Scan(&e)
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to get account")
@@ -198,19 +181,104 @@ func (s *sAccount) UpdateAccount(ctx context.Context, id uuid.UUID, in model.Acc
 		return nil, gerror.New("account not found")
 	}
 
+	if existing.UserId.String() != userId {
+		return nil, gerror.New("account does not belong to user")
+	}
+
 	// Restrict balance update for EXPENSE and INCOME accounts
-	if (existing.Type == utils.AccountTypeExpense || existing.Type == utils.AccountTypeIncome) && (in.Units != 0 && in.Nanos != 0) {
+	if (existing.Type == utils.AccountTypeExpense || existing.Type == utils.AccountTypeIncome) && (in.BalanceUnits != nil || in.BalanceNanos != nil) {
 		return nil, gerror.New("cannot manually update balance for " + gconv.String(existing.Type) + " accounts")
 	}
 
-	m := dao.Accounts.Ctx(ctx).Where("id", id)
-	if userId != "" {
-		m = m.Where("user_id", userId)
+	// Convert input to map to verify handling of zero values
+	data := gconv.Map(in)
+	if in.ParentId == uuid.Nil {
+		delete(data, "ParentId")
 	}
-	_, err = m.OmitEmpty().Data(in).Update()
+	if in.DefaultChildId == uuid.Nil {
+		delete(data, "DefaultChildId")
+	}
+
+	// Prevent direct update of balance fields
+	delete(data, "BalanceUnits")
+	delete(data, "BalanceNanos")
+	delete(data, "BalanceDecimal")
+	delete(data, "CurrencyCode")
+
+	inBalanceUnits := 0
+	if in.BalanceUnits != nil {
+		inBalanceUnits = int(*in.BalanceUnits)
+	}
+	inBalanceNanos := 0
+	if in.BalanceNanos != nil {
+		inBalanceNanos = int(*in.BalanceNanos)
+	}
+
+	inMoney := utils.NewMoneyFromUnitsAndNanos(int64(inBalanceUnits), int32(inBalanceNanos), existing.CurrencyCode)
+	existsAccountMoney := utils.NewFromEntity(existing)
+
+	// Wrap in transaction
+	err = g.DB().Transaction(ctx, func(ctx context.Context, dbTx gdb.TX) error {
+		m := dao.Accounts.Ctx(ctx).Where(dao.Accounts.Columns().Id, id)
+		if userId != "" {
+			m = m.Where(dao.Accounts.Columns().UserId, userId)
+		}
+		// Only update meta
+		if len(data) > 0 {
+			_, err := m.Data(data).Update()
+			if err != nil {
+				return gerror.Wrap(err, "failed to update account")
+			}
+		}
+
+		// If not update balance, return
+		if in.BalanceUnits == nil && in.BalanceNanos == nil {
+			return nil
+		}
+
+		// Get opening equity account
+		equityAccountId, err := s.getOrCreateOpeningBalanceEquityAccountInTx(ctx, dbTx, existing.CurrencyCode, existing.UserId)
+		if err != nil {
+			return gerror.Wrap(err, "failed to get/create opening equity account")
+		}
+
+		tran := model.TransactionCreateInput{
+			UserId:        existing.UserId,
+			Date:          gtime.Now().Format("Y-m-d"),
+			FromAccountId: equityAccountId,
+			ToAccountId:   id,
+			CurrencyCode:  existing.CurrencyCode,
+			Note:          fmt.Sprintf("Update Balance - %s - %s", existing.Name, existing.CurrencyCode),
+			Type:          utils.TransactionTypeOpeningBalance,
+		}
+
+		// Confirm transfer amount
+		addMoney, err := inMoney.Sub(existsAccountMoney)
+		if err != nil {
+			return gerror.Wrap(err, "failed to calculate transfer amount")
+		}
+
+		// If delta money is zero, return
+		if addMoney.IsZero() {
+			return nil
+		}
+
+		units, nanos := addMoney.ToEntityValues()
+		tran.BalanceUnits = units
+		tran.BalanceNanos = int(nanos)
+
+		_, err = service.Transaction().CreateTransaction(ctx, tran, &dbTx)
+		if err != nil {
+			return gerror.Wrap(err, "failed to create transaction")
+		}
+
+		return nil
+	})
+
 	if err != nil {
-		return nil, gerror.Wrap(err, "failed to update account")
+		return nil, err
 	}
+
 	return s.GetAccount(ctx, id)
 }
 
@@ -235,7 +303,7 @@ func (s *sAccount) DeleteAccount(ctx context.Context, id uuid.UUID, migrationTar
 	var childAccountIds []uuid.UUID
 	if account.IsGroup {
 		var children []entity.Accounts
-		err = dao.Accounts.Ctx(ctx).Where("parent_id", id).Scan(&children)
+		err = dao.Accounts.Ctx(ctx).Where(dao.Accounts.Columns().ParentId, id).Scan(&children)
 		if err != nil {
 			return "", gerror.Wrap(err, "failed to get child accounts")
 		}
@@ -253,8 +321,8 @@ func (s *sAccount) DeleteAccount(ctx context.Context, id uuid.UUID, migrationTar
 	if transactionCount == 0 {
 		// No transactions - can delete directly
 		// Soft delete account
-		_, err = dao.Accounts.Ctx(ctx).Where("id", id).Data(entity.Accounts{
-			DeletedAt: gtime.Now(),
+		_, err = dao.Accounts.Ctx(ctx).Where(dao.Accounts.Columns().Id, id).Data(g.Map{
+			dao.Accounts.Columns().DeletedAt: gtime.Now(),
 		}).Update()
 		if err != nil {
 			return "", gerror.Wrap(err, "failed to delete account")
@@ -262,7 +330,7 @@ func (s *sAccount) DeleteAccount(ctx context.Context, id uuid.UUID, migrationTar
 
 		// Also delete child accounts if this is a group
 		if account.IsGroup && len(childAccountIds) > 0 {
-			_, err = dao.Accounts.Ctx(ctx).WhereIn("id", childAccountIds).Data(entity.Accounts{
+			_, err = dao.Accounts.Ctx(ctx).WhereIn(dao.Accounts.Columns().Id, childAccountIds).FieldsEx(dao.Accounts.Columns().BalanceDecimal).Data(entity.Accounts{
 				DeletedAt: gtime.Now(),
 			}).Update()
 			if err != nil {
@@ -310,88 +378,18 @@ func (s *sAccount) GetAccountTransactionCount(ctx context.Context, id uuid.UUID)
 	return count, err
 }
 
-// // getOrCreateOpeningBalanceEquityAccount gets or creates an opening balance equity account for a given currency.
-// // Equity accounts are named "Opening Balance - {Currency}" and are used as the source for opening balance transactions.
-// func (s *sAccount) getOrCreateOpeningBalanceEquityAccount(ctx context.Context, currency string, userId uuid.UUID) (uuid.UUID, error) {
-// 	// Look for existing equity account for this currency and user
-// 	equityAccountName := "Opening Balance - " + currency
-
-// 	var existing entity.Accounts
-// 	err := dao.Accounts.Ctx(ctx).
-// 		Where("user_id", userId).
-// 		Where("type", "EQUITY").
-// 		Where("currency", currency).
-// 		Where("name", equityAccountName).
-// 		Where("deleted_at IS NULL").
-// 		Scan(&existing)
-
-// 	if err != nil {
-// 		return uuid.Nil, gerror.Wrap(err, "failed to query existing equity account")
-// 	}
-
-// 	// If found, return its ID
-// 	if existing.Id != uuid.Nil {
-// 		return existing.Id, nil
-// 	}
-
-// 	// Create new equity account
-// 	newId, err := uuid.NewV7()
-// 	if err != nil {
-// 		return uuid.Nil, gerror.Wrap(err, "failed to create equity account")
-// 	}
-
-// 	equityAccount := g.Map{
-// 		"Id":       newId.String(),
-// 		"UserId":   userId,
-// 		"Name":     equityAccountName,
-// 		"Type":     "EQUITY",
-// 		"IsGroup":  false,
-// 		"Balance":  0,
-// 		"Currency": currency,
-// 		"Date":     gtime.Now().Format("Y-m-d"),
-// 	}
-
-// 	_, err = dao.Accounts.Ctx(ctx).Data(equityAccount).Insert()
-// 	if err != nil {
-// 		return uuid.Nil, gerror.Wrap(err, "failed to create equity account")
-// 	}
-
-// 	return newId, nil
-// }
-
 // getOrCreateOpeningBalanceEquityAccountInTx gets or creates an opening balance equity account within a transaction.
 func (s *sAccount) getOrCreateOpeningBalanceEquityAccountInTx(ctx context.Context, dbTx gdb.TX, currency string, userId uuid.UUID) (uuid.UUID, error) {
-	// Ensure EQUITY type exists in account_types to prevent FK violation
-	exists, err := dbTx.Model("account_types").Where("type", utils.AccountTypeEquity).Exist()
-	if err != nil && err != sql.ErrNoRows {
-		g.Log().Errorf(ctx, "Failed to check EQUITY type: %v", err)
-		return uuid.Nil, fmt.Errorf("failed to check EQUITY account type: %w", err)
-	}
-	if !exists {
-		g.Log().Info(ctx, "EQUITY type missing, creating it automatically")
-		_, err = dbTx.Model("account_types").Save(entity.AccountTypes{
-			Type:  utils.AccountTypeEquity,
-			Label: "Equity",
-			Color: "text-purple-600",
-			Bg:    "bg-purple-100",
-			Icon:  "Landmark",
-		})
-		if err != nil {
-			g.Log().Errorf(ctx, "Failed to insert EQUITY type: %v", err)
-			return uuid.Nil, fmt.Errorf("failed to create EQUITY account type: %w", err)
-		}
-	}
-
 	// Look for existing equity account for this currency and user
-	equityAccountName := "Opening Balance - " + currency
+	equityAccountName := "Opening Balance - " + currency + " - " + userId.String()
 
 	var existing entity.Accounts
-	err = dbTx.Model(dao.Accounts.Table()).
-		Where("user_id", userId).
-		Where("type", utils.AccountTypeEquity).
-		Where("currency", currency).
-		Where("name", equityAccountName).
-		Where("deleted_at IS NULL").
+	err := dbTx.Model(dao.Accounts.Table()).
+		Where(dao.Accounts.Columns().UserId, userId).
+		Where(dao.Accounts.Columns().Type, utils.AccountTypeEquity).
+		Where(dao.Accounts.Columns().CurrencyCode, currency).
+		Where(dao.Accounts.Columns().Name, equityAccountName).
+		Where(dao.Accounts.Columns().DeletedAt + " IS NULL").
 		Scan(&existing)
 
 	if err != nil && err != sql.ErrNoRows {
@@ -408,7 +406,7 @@ func (s *sAccount) getOrCreateOpeningBalanceEquityAccountInTx(ctx context.Contex
 	newId, err := uuid.NewV7()
 	if err != nil {
 		g.Log().Errorf(ctx, "Failed to generate UUID: %v", err)
-		return uuid.Nil, err
+		return uuid.Nil, gerror.Wrap(err, "failed to generate UUID")
 	}
 
 	equityAccount := entity.Accounts{
@@ -423,10 +421,16 @@ func (s *sAccount) getOrCreateOpeningBalanceEquityAccountInTx(ctx context.Contex
 		Date:         gtime.Now(),
 	}
 
-	_, err = dbTx.Model(dao.Accounts.Table()).Save(equityAccount)
+	_, err = dbTx.Model(dao.Accounts.Table()).
+		FieldsEx(
+			dao.Accounts.Columns().BalanceDecimal,
+			dao.Accounts.Columns().ParentId,
+			dao.Accounts.Columns().DefaultChildId,
+		).
+		Insert(equityAccount)
 	if err != nil {
 		g.Log().Errorf(ctx, "Failed to insert equity account: %v", err)
-		return uuid.Nil, fmt.Errorf("failed to create equity account: %w", err)
+		return uuid.Nil, gerror.Wrap(err, "failed to create equity account")
 	}
 
 	return newId, nil

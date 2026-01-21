@@ -33,10 +33,10 @@ func (s *sDashboard) GetDashboardSummary(ctx context.Context) (out *model.Dashbo
 	// Get all ASSET type accounts and sum their balances using MoneyHelper
 	var assetAccounts []entity.Accounts
 	err = dao.Accounts.Ctx(ctx).
-		Where("user_id", userId).
-		Where("type", utils.AccountTypeAsset).
-		Where("is_group", false).
-		WhereNull("deleted_at").
+		Where(dao.Accounts.Columns().UserId, userId).
+		Where(dao.Accounts.Columns().Type, utils.AccountTypeAsset).
+		Where(dao.Accounts.Columns().IsGroup, false).
+		WhereNull(dao.Accounts.Columns().DeletedAt).
 		Scan(&assetAccounts)
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to get asset accounts")
@@ -64,10 +64,10 @@ func (s *sDashboard) GetDashboardSummary(ctx context.Context) (out *model.Dashbo
 	// Get all LIABILITY type accounts
 	var liabilityAccounts []entity.Accounts
 	err = dao.Accounts.Ctx(ctx).
-		Where("user_id", userId).
-		Where("type", utils.AccountTypeLiability).
-		Where("is_group", false).
-		WhereNull("deleted_at").
+		Where(dao.Accounts.Columns().UserId, userId).
+		Where(dao.Accounts.Columns().Type, utils.AccountTypeLiability).
+		Where(dao.Accounts.Columns().IsGroup, false).
+		WhereNull(dao.Accounts.Columns().DeletedAt).
 		Scan(&liabilityAccounts)
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to get liability accounts")
@@ -117,10 +117,10 @@ func (s *sDashboard) GetMonthlyStats(ctx context.Context) (out *model.MonthlySta
 	// Get all INCOME transactions this month
 	var incomeTransactions []entity.Transactions
 	err = dao.Transactions.Ctx(ctx).
-		Where("user_id", userId).
-		Where("type", utils.TransactionTypeIncome).
-		WhereBetween("date", startOfMonth, endOfMonth).
-		WhereNull("deleted_at").
+		Where(dao.Transactions.Columns().UserId, userId).
+		Where(dao.Transactions.Columns().Type, utils.TransactionTypeIncome).
+		WhereBetween(dao.Transactions.Columns().Date, startOfMonth, endOfMonth).
+		WhereNull(dao.Transactions.Columns().DeletedAt).
 		Scan(&incomeTransactions)
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to get income transactions")
@@ -153,10 +153,10 @@ func (s *sDashboard) GetMonthlyStats(ctx context.Context) (out *model.MonthlySta
 	// Get all EXPENSE transactions this month
 	var expenseTransactions []entity.Transactions
 	err = dao.Transactions.Ctx(ctx).
-		Where("user_id", userId).
-		Where("type", utils.TransactionTypeExpense).
-		WhereBetween("date", startOfMonth, endOfMonth).
-		WhereNull("deleted_at").
+		Where(dao.Transactions.Columns().UserId, userId).
+		Where(dao.Transactions.Columns().Type, utils.TransactionTypeExpense).
+		WhereBetween(dao.Transactions.Columns().Date, startOfMonth, endOfMonth).
+		WhereNull(dao.Transactions.Columns().DeletedAt).
 		Scan(&expenseTransactions)
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to get expense transactions")
@@ -201,10 +201,10 @@ func (s *sDashboard) GetBalanceTrend(ctx context.Context, accounts []uuid.UUID) 
 	if len(accounts) == 0 {
 		var userAccounts []entity.Accounts
 		err = dao.Accounts.Ctx(ctx).
-			Where("user_id", userId).
-			Where("is_group", false).
-			WhereNull("deleted_at").
-			Fields("id").
+			Where(dao.Accounts.Columns().UserId, userId).
+			Where(dao.Accounts.Columns().IsGroup, false).
+			WhereNull(dao.Accounts.Columns().DeletedAt).
+			Fields(dao.Accounts.Columns().Id).
 			Scan(&userAccounts)
 		if err != nil {
 			return nil, gerror.Wrap(err, "failed to get user accounts")
@@ -228,8 +228,8 @@ func (s *sDashboard) GetBalanceTrend(ctx context.Context, accounts []uuid.UUID) 
 	currentBalances := make(map[uuid.UUID]AccountBalance)
 	var accountRecs []entity.Accounts
 	err = dao.Accounts.Ctx(ctx).
-		WhereIn("id", accounts).
-		Where("user_id", userId).
+		WhereIn(dao.Accounts.Columns().Id, accounts).
+		Where(dao.Accounts.Columns().UserId, userId).
 		Scan(&accountRecs)
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to get account balances")
@@ -248,8 +248,8 @@ func (s *sDashboard) GetBalanceTrend(ctx context.Context, accounts []uuid.UUID) 
 	var toTrans []entity.Transactions
 
 	err = dao.Transactions.Ctx(ctx).
-		WhereIn("from_account_id", accounts).
-		WhereGTE("date", startOfDay).
+		WhereIn(dao.Transactions.Columns().FromAccountId, accounts).
+		WhereGTE(dao.Transactions.Columns().Date, startOfDay).
 		Limit(10000).
 		Scan(&fromTrans)
 	if err != nil {
@@ -257,8 +257,8 @@ func (s *sDashboard) GetBalanceTrend(ctx context.Context, accounts []uuid.UUID) 
 	}
 
 	err = dao.Transactions.Ctx(ctx).
-		WhereIn("to_account_id", accounts).
-		WhereGTE("date", startOfDay).
+		WhereIn(dao.Transactions.Columns().ToAccountId, accounts).
+		WhereGTE(dao.Transactions.Columns().Date, startOfDay).
 		Limit(10000).
 		Scan(&toTrans)
 	if err != nil {

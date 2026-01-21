@@ -23,8 +23,8 @@ type AccountUpdateInput struct {
 	Type           int
 	IsGroup        bool
 	CurrencyCode   string
-	Units          int64
-	Nanos          int
+	BalanceUnits   *int64
+	BalanceNanos   *int
 	DefaultChildId uuid.UUID
 	Date           string
 	Number         string

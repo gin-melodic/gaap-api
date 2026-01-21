@@ -27,7 +27,7 @@ func (s *sUser) GetUserProfile(ctx context.Context) (out *model.UserProfile, err
 	userId := utils.RequireUserId(ctx)
 
 	var user *entity.Users
-	err = dao.Users.Ctx(ctx).Where("id", userId).Scan(&user)
+	err = dao.Users.Ctx(ctx).Where(dao.Users.Columns().Id, userId).Scan(&user)
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to get user")
 	}
@@ -48,7 +48,7 @@ func (s *sUser) GetUserProfile(ctx context.Context) (out *model.UserProfile, err
 func (s *sUser) UpdateUserProfile(ctx context.Context, in model.UserUpdateInput) (out *model.UserProfile, err error) {
 	userId := utils.RequireUserId(ctx)
 
-	_, err = dao.Users.Ctx(ctx).Data(in).Where("id", userId).Update()
+	_, err = dao.Users.Ctx(ctx).Data(in).Where(dao.Users.Columns().Id, userId).Update()
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to update user profile")
 	}
@@ -60,7 +60,7 @@ func (s *sUser) UpdateThemePreference(ctx context.Context, in model.Theme) (out 
 
 	// Validate that the theme exists
 	var theme *entity.Themes
-	err = dao.Themes.Ctx(ctx).Where("id", in.Id).WhereNull("deleted_at").Scan(&theme)
+	err = dao.Themes.Ctx(ctx).Where(dao.Themes.Columns().Id, in.Id).WhereNull(dao.Themes.Columns().DeletedAt).Scan(&theme)
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to get theme")
 	}
@@ -68,15 +68,7 @@ func (s *sUser) UpdateThemePreference(ctx context.Context, in model.Theme) (out 
 		return nil, gerror.New("theme not found")
 	}
 
-	// Update user's theme_id using entity structure
-	updateData := entity.Users{
-		ThemeId: theme.Id,
-	}
-	_, err = dao.Users.Ctx(ctx).Where("id", userId).Data(g.Map{"theme_id": theme.Id}).Update()
-	if err != nil {
-		return nil, gerror.Wrap(err, "failed to update theme preference")
-	}
-	_ = updateData // Suppress unused variable warning
+	_, err = dao.Users.Ctx(ctx).Where(dao.Users.Columns().Id, userId).Data(g.Map{dao.Users.Columns().ThemeId: theme.Id}).Update()
 
 	// Return the updated theme
 	out = &model.Theme{
