@@ -37,6 +37,7 @@ message UserInput {
   string nickname = 1;
   optional string avatar = 2;
   base.UserLevelType plan = 3;
+  optional string main_currency = 4;
 }
 
 message GetUserProfileReq {}

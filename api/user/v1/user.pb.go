@@ -139,6 +139,7 @@ type UserInput struct {
 	Nickname      string                 `protobuf:"bytes,1,opt,name=nickname,proto3" json:"nickname,omitempty"`
 	Avatar        *string                `protobuf:"bytes,2,opt,name=avatar,proto3,oneof" json:"avatar,omitempty"`
 	Plan          base.UserLevelType     `protobuf:"varint,3,opt,name=plan,proto3,enum=base.UserLevelType" json:"plan,omitempty"`
+	MainCurrency  *string                `protobuf:"bytes,4,opt,name=main_currency,json=mainCurrency,proto3,oneof" json:"main_currency,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -192,6 +193,13 @@ func (x *UserInput) GetPlan() base.UserLevelType {
 		return x.Plan
 	}
 	return base.UserLevelType(0)
+}
+
+func (x *UserInput) GetMainCurrency() string {
+	if x != nil && x.MainCurrency != nil {
+		return *x.MainCurrency
+	}
+	return ""
 }
 
 type GetUserProfileReq struct {
@@ -491,12 +499,14 @@ const file_user_v1_user_proto_rawDesc = "" +
 	"created_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
 	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAtB\t\n" +
-	"\a_avatar\"x\n" +
+	"\a_avatar\"\xb4\x01\n" +
 	"\tUserInput\x12\x1a\n" +
 	"\bnickname\x18\x01 \x01(\tR\bnickname\x12\x1b\n" +
 	"\x06avatar\x18\x02 \x01(\tH\x00R\x06avatar\x88\x01\x01\x12'\n" +
-	"\x04plan\x18\x03 \x01(\x0e2\x13.base.UserLevelTypeR\x04planB\t\n" +
-	"\a_avatar\"\x13\n" +
+	"\x04plan\x18\x03 \x01(\x0e2\x13.base.UserLevelTypeR\x04plan\x12(\n" +
+	"\rmain_currency\x18\x04 \x01(\tH\x01R\fmainCurrency\x88\x01\x01B\t\n" +
+	"\a_avatarB\x10\n" +
+	"\x0e_main_currency\"\x13\n" +
 	"\x11GetUserProfileReq\"_\n" +
 	"\x11GetUserProfileRes\x12!\n" +
 	"\x04user\x18\x01 \x01(\v2\r.user.v1.UserR\x04user\x12'\n" +

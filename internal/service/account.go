@@ -20,8 +20,8 @@ type (
 		GetAccount(ctx context.Context, id uuid.UUID) (out *entity.Accounts, err error)
 		UpdateAccount(ctx context.Context, id uuid.UUID, in model.AccountUpdateInput) (out *entity.Accounts, err error)
 		DeleteAccount(ctx context.Context, id uuid.UUID, migrationTargets map[string]uuid.UUID) (taskId string, err error)
-		// GetAccountTransactionCount returns the number of transactions involving this account
-		GetAccountTransactionCount(ctx context.Context, id uuid.UUID) (count int, err error)
+		// GetAccountTransactionCount returns the number of transactions involving this account, and the number of transactions involving this account without equity
+		GetAccountTransactionCount(ctx context.Context, id uuid.UUID) (count int, countWithoutEquity int, err error)
 	}
 )
 

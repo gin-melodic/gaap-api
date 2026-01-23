@@ -131,7 +131,7 @@ func (s *sAccount) CreateAccount(ctx context.Context, in model.AccountCreateInpu
 				Note:          fmt.Sprintf("Opening Balance - %s - %s", in.Name, in.CurrencyCode),
 				Type:          utils.TransactionTypeOpeningBalance,
 			}
-			_, err = service.Transaction().CreateTransaction(ctx, txData, &dbTx)
+			_, err = service.Transaction().CreateTransaction(ctx, txData, dbTx)
 			if err != nil {
 				return gerror.Wrap(err, "failed to create opening balance transaction")
 			}
@@ -155,18 +155,7 @@ func (s *sAccount) CreateAccount(ctx context.Context, in model.AccountCreateInpu
 }
 
 func (s *sAccount) GetAccount(ctx context.Context, id uuid.UUID) (out *entity.Accounts, err error) {
-	userId := utils.RequireUserId(ctx)
-
-	var e entity.Accounts
-	m := dao.Accounts.Ctx(ctx).Where(dao.Accounts.Columns().Id, id).Where(dao.Accounts.Columns().UserId, userId)
-	err = m.Scan(&e)
-	if err != nil {
-		return nil, gerror.Wrap(err, "failed to get account")
-	}
-	if e.Id == uuid.Nil {
-		return nil, gerror.New("account not found")
-	}
-	return &e, nil
+	return utils.GetAndVerify(ctx, utils.AccountAccessor, id)
 }
 
 func (s *sAccount) UpdateAccount(ctx context.Context, id uuid.UUID, in model.AccountUpdateInput) (out *entity.Accounts, err error) {
@@ -267,7 +256,7 @@ func (s *sAccount) UpdateAccount(ctx context.Context, id uuid.UUID, in model.Acc
 		tran.BalanceUnits = units
 		tran.BalanceNanos = int(nanos)
 
-		_, err = service.Transaction().CreateTransaction(ctx, tran, &dbTx)
+		_, err = service.Transaction().CreateTransaction(ctx, tran, dbTx)
 		if err != nil {
 			return gerror.Wrap(err, "failed to create transaction")
 		}
@@ -283,64 +272,65 @@ func (s *sAccount) UpdateAccount(ctx context.Context, id uuid.UUID, in model.Acc
 }
 
 func (s *sAccount) DeleteAccount(ctx context.Context, id uuid.UUID, migrationTargets map[string]uuid.UUID) (taskId string, err error) {
-	// Get userId from context for security filtering
-	userId := utils.RequireUserId(ctx)
-
 	// Verify account exists and belongs to user
-	account, err := s.GetAccount(ctx, id)
+	account, err := utils.GetAndVerify(ctx, utils.AccountAccessor, id)
 	if err != nil {
-		return "", err
-	}
-	if account == nil || account.Id == uuid.Nil {
-		return "", gerror.New("account not found")
+		return "", gerror.Wrap(err, "failed to get account")
 	}
 
-	if account.UserId.String() != userId {
-		return "", gerror.New("account does not belong to user")
+	// Begin transaction
+	dbTx, err := g.DB().Begin(ctx)
+	if err != nil {
+		return "", gerror.Wrap(err, "failed to begin transaction")
 	}
+
+	defer func() {
+		if err != nil {
+			dbTx.Rollback()
+		} else {
+			dbTx.Commit()
+		}
+	}()
 
 	// Get child accounts if this is a group
 	var childAccountIds []uuid.UUID
 	if account.IsGroup {
-		var children []entity.Accounts
-		err = dao.Accounts.Ctx(ctx).Where(dao.Accounts.Columns().ParentId, id).Scan(&children)
+		err = dbTx.Model(dao.Accounts.Table()).
+			Fields(dao.Accounts.Columns().Id).
+			Where(dao.Accounts.Columns().ParentId, id).
+			Scan(&childAccountIds)
 		if err != nil {
 			return "", gerror.Wrap(err, "failed to get child accounts")
 		}
-		for _, child := range children {
-			childAccountIds = append(childAccountIds, child.Id)
-		}
 	}
 
-	// Check if account has transactions
-	transactionCount, err := s.GetAccountTransactionCount(ctx, id)
+	// Check if account has transactions(with children accounts)
+	accountIds := append([]uuid.UUID{id}, childAccountIds...)
+	totalTxCount, err := dbTx.Model(dao.Transactions.Table()).
+		Where(fmt.Sprintf("%s IN(?) OR %s IN(?)",
+			dao.Transactions.Columns().FromAccountId,
+			dao.Transactions.Columns().ToAccountId),
+			accountIds, accountIds).
+		Count()
 	if err != nil {
-		return "", err
+		return "", gerror.Wrap(err, "failed to get transactions count")
 	}
 
-	if transactionCount == 0 {
+	// Scenario 1: No transactions - direct delete in transaction
+	if totalTxCount == 0 {
 		// No transactions - can delete directly
 		// Soft delete account
-		_, err = dao.Accounts.Ctx(ctx).Where(dao.Accounts.Columns().Id, id).Data(g.Map{
-			dao.Accounts.Columns().DeletedAt: gtime.Now(),
-		}).Update()
-		if err != nil {
-			return "", gerror.Wrap(err, "failed to delete account")
+		if err = directDeleteAccount(ctx, dbTx, *account, true); err != nil {
+			return "", gerror.Wrapf(err, "failed to delete account %s", account.Name)
 		}
-
-		// Also delete child accounts if this is a group
-		if account.IsGroup && len(childAccountIds) > 0 {
-			_, err = dao.Accounts.Ctx(ctx).WhereIn(dao.Accounts.Columns().Id, childAccountIds).FieldsEx(dao.Accounts.Columns().BalanceDecimal).Data(entity.Accounts{
-				DeletedAt: gtime.Now(),
-			}).Update()
-			if err != nil {
-				return "", gerror.Wrap(err, "failed to delete child accounts")
-			}
-		}
-		return "", nil // Successfully deleted, no task needed
+		return "", nil
 	}
 
-	// Has transactions - create migration task
+	// Scenario 2: Has transactions - create migration task because of complexity
+	// migrationTargets is required in this situation
+	if len(migrationTargets) == 0 {
+		return "", gerror.New("migration targets are required")
+	}
 	payload := model.AccountMigrationPayload{
 		Payload:          &model.Payload{UserId: account.UserId},
 		AccountId:        id,
@@ -354,28 +344,48 @@ func (s *sAccount) DeleteAccount(ctx context.Context, id uuid.UUID, migrationTar
 		Payload: payload,
 	})
 	if err != nil {
-		return "", err
+		return "", gerror.Wrap(err, "failed to create delete account task")
 	}
 
 	return task.Id.String(), nil
 }
 
-// GetAccountTransactionCount returns the number of transactions involving this account
-func (s *sAccount) GetAccountTransactionCount(ctx context.Context, id uuid.UUID) (count int, err error) {
+// GetAccountTransactionCount returns the number of transactions involving this account, and the number of transactions involving this account without equity
+func (s *sAccount) GetAccountTransactionCount(ctx context.Context, id uuid.UUID) (count int, countWithoutEquity int, err error) {
 	// Verify account exists and belongs to user
 	account, err := s.GetAccount(ctx, id)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	if account == nil || account.Id == uuid.Nil {
-		return 0, gerror.New("account not found")
+		return 0, 0, gerror.New("account not found")
 	}
 
-	// Count transactions where this account is from or to
-	count, err = dao.Transactions.Ctx(ctx).
-		Where("from_account_id = ? OR to_account_id = ?", id, id).
-		Count()
-	return count, err
+	// Use a single query to fetch both counts for efficiency
+	var result struct {
+		Count              int `orm:"count"`
+		CountWithoutEquity int `orm:"count_without_equity"`
+	}
+
+	err = dao.Transactions.Ctx(ctx).
+		Fields(fmt.Sprintf(
+			"COUNT(*) as count, COUNT(CASE WHEN %s != %d THEN 1 END) as count_without_equity",
+			dao.Transactions.Columns().Type,
+			utils.TransactionTypeOpeningBalance,
+		)).
+		Where(fmt.Sprintf("%s = ? OR %s = ?",
+			dao.Transactions.Columns().FromAccountId,
+			dao.Transactions.Columns().ToAccountId),
+			id, id,
+		).
+		Where(dao.Transactions.Columns().DeletedAt + " IS NULL").
+		Scan(&result)
+
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return result.Count, result.CountWithoutEquity, nil
 }
 
 // getOrCreateOpeningBalanceEquityAccountInTx gets or creates an opening balance equity account within a transaction.
@@ -434,4 +444,24 @@ func (s *sAccount) getOrCreateOpeningBalanceEquityAccountInTx(ctx context.Contex
 	}
 
 	return newId, nil
+}
+
+func directDeleteAccount(ctx context.Context, dbTx gdb.TX, account entity.Accounts, includeChildren bool) error {
+	return utils.SoftDelete(ctx, dbTx, utils.SoftDeleteOptions{
+		TableName:      dao.Accounts.Table(),
+		WhereCondition: dao.Accounts.Columns().Id,
+		WhereArgs:      []interface{}{account.Id},
+		// Casecase
+		CascadeFunc: func(ctx context.Context, tx gdb.TX) error {
+			if !includeChildren || !account.IsGroup {
+				return nil
+			}
+			_, err := tx.Model(dao.Accounts.Table()).
+				Where(dao.Accounts.Columns().ParentId, account.Id).
+				Data(g.Map{dao.Accounts.Columns().DeletedAt: gtime.Now()}).
+				Update()
+
+			return err
+		},
+	})
 }

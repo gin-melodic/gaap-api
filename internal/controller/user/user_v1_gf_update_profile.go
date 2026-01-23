@@ -24,6 +24,10 @@ func (c *ControllerV1) GfUpdateProfile(ctx context.Context, req *v1.GfUpdateProf
 		input.Avatar = *req.Input.Avatar
 	}
 
+	if req.Input.MainCurrency != nil {
+		input.MainCurrency = *req.Input.MainCurrency
+	}
+
 	profile, err := service.User().UpdateUserProfile(ctx, input)
 	if err != nil {
 		return nil, err

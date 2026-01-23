@@ -125,5 +125,6 @@ message GetAccountTransactionCountReq {
 
 message GetAccountTransactionCountRes {
   int32 count = 1;
+  int32 count_without_equity = 2;
   base.BaseResponse base = 255; 
 }

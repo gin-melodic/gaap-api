@@ -893,11 +893,12 @@ func (x *GetAccountTransactionCountReq) GetId() string {
 }
 
 type GetAccountTransactionCountRes struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Count         int32                  `protobuf:"varint,1,opt,name=count,proto3" json:"count,omitempty"`
-	Base          *base.BaseResponse     `protobuf:"bytes,255,opt,name=base,proto3" json:"base,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Count              int32                  `protobuf:"varint,1,opt,name=count,proto3" json:"count,omitempty"`
+	CountWithoutEquity int32                  `protobuf:"varint,2,opt,name=count_without_equity,json=countWithoutEquity,proto3" json:"count_without_equity,omitempty"`
+	Base               *base.BaseResponse     `protobuf:"bytes,255,opt,name=base,proto3" json:"base,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *GetAccountTransactionCountRes) Reset() {
@@ -933,6 +934,13 @@ func (*GetAccountTransactionCountRes) Descriptor() ([]byte, []int) {
 func (x *GetAccountTransactionCountRes) GetCount() int32 {
 	if x != nil {
 		return x.Count
+	}
+	return 0
+}
+
+func (x *GetAccountTransactionCountRes) GetCountWithoutEquity() int32 {
+	if x != nil {
+		return x.CountWithoutEquity
 	}
 	return 0
 }
@@ -1025,9 +1033,10 @@ const file_account_v1_account_proto_rawDesc = "" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12'\n" +
 	"\x04base\x18\xff\x01 \x01(\v2\x12.base.BaseResponseR\x04base\"/\n" +
 	"\x1dGetAccountTransactionCountReq\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"^\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\x90\x01\n" +
 	"\x1dGetAccountTransactionCountRes\x12\x14\n" +
-	"\x05count\x18\x01 \x01(\x05R\x05count\x12'\n" +
+	"\x05count\x18\x01 \x01(\x05R\x05count\x120\n" +
+	"\x14count_without_equity\x18\x02 \x01(\x05R\x12countWithoutEquity\x12'\n" +
 	"\x04base\x18\xff\x01 \x01(\v2\x12.base.BaseResponseR\x04base2\xf9\x03\n" +
 	"\x0eAccountService\x12H\n" +
 	"\fListAccounts\x12\x1b.account.v1.ListAccountsReq\x1a\x1b.account.v1.ListAccountsRes\x12K\n" +

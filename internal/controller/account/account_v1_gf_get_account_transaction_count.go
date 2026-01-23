@@ -22,7 +22,7 @@ func (c *ControllerV1) GfGetAccountTransactionCount(ctx context.Context, req *v1
 		return nil, err
 	}
 
-	count, err := service.Account().GetAccountTransactionCount(ctx, id)
+	count, _, err := service.Account().GetAccountTransactionCount(ctx, id)
 	if err != nil {
 		return nil, err
 	}

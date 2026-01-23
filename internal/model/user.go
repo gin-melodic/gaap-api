@@ -10,7 +10,8 @@ type UserProfile struct {
 }
 
 type UserUpdateInput struct {
-	Nickname string
-	Avatar   string
-	Plan     int
+	Nickname     string `json:"nickname"`
+	Avatar       string `json:"avatar"`
+	Plan         int    `json:"plan"`
+	MainCurrency string `json:"mainCurrency"`
 }

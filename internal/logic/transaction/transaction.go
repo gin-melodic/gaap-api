@@ -73,7 +73,7 @@ func (s *sTransaction) ListTransactions(ctx context.Context, in model.Transactio
 
 // CreateTransaction creates a new transaction.
 // If tx is provided, it will be used for the transaction.
-func (s *sTransaction) CreateTransaction(ctx context.Context, in model.TransactionCreateInput, tx *gdb.TX) (out *entity.Transactions, err error) {
+func (s *sTransaction) CreateTransaction(ctx context.Context, in model.TransactionCreateInput, tx gdb.TX) (out *entity.Transactions, err error) {
 	// Generate UUID7 for the new transaction
 	newId, err := uuid.NewV7()
 	if err != nil {
@@ -104,24 +104,24 @@ func (s *sTransaction) CreateTransaction(ctx context.Context, in model.Transacti
 		if err != nil {
 			return nil, gerror.Wrap(err, "failed to begin transaction")
 		}
-		transactionTx = &ttx
+		transactionTx = ttx
 	}
 
 	// 1. Insert transaction record
-	_, insertErr := (*transactionTx).Model(dao.Transactions.Table()).FieldsEx(dao.Transactions.Columns().BalanceDecimal, dao.Transactions.Columns().DeletedAt).Data(txEntity).Insert()
+	_, insertErr := transactionTx.Model(dao.Transactions.Table()).FieldsEx(dao.Transactions.Columns().BalanceDecimal, dao.Transactions.Columns().DeletedAt).Data(txEntity).Insert()
 	if insertErr != nil {
 		return nil, gerror.Wrap(insertErr, "failed to insert transaction")
 	}
 
 	// 2. Apply balance changes
-	balanceErr := service.Balance().ApplyTransactionInTx(ctx, *transactionTx, &in)
+	balanceErr := service.Balance().ApplyTransactionInTx(ctx, transactionTx, &in)
 	if balanceErr != nil {
 		return nil, gerror.Wrap(balanceErr, "failed to apply balance changes")
 	}
 
 	// 3. Commit transaction if it was created by this function
 	if tx == nil {
-		(*transactionTx).Commit()
+		transactionTx.Commit()
 	}
 
 	// Retrieve the created transaction
