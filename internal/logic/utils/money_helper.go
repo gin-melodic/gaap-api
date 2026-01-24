@@ -133,3 +133,8 @@ func (m *MoneyHelper) LessThan(other *MoneyHelper) bool {
 	}
 	return m.Decimal.LessThan(other.Decimal)
 }
+
+// IsZero returns true if the money amount is zero
+func (m *MoneyHelper) IsZero() bool {
+	return m.Decimal.IsZero()
+}

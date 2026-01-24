@@ -24,15 +24,28 @@ func New() *sDashboard {
 	return &sDashboard{}
 }
 
-// GetDashboardSummary calculates total assets, liabilities, and net worth for the current user
+// GetDashboardSummary calculates total assets, liabilities, and net worth for the current user.
+// Results are cached with a short TTL for performance.
 func (s *sDashboard) GetDashboardSummary(ctx context.Context) (out *model.DashboardSummary, err error) {
 	userId := utils.RequireUserId(ctx)
 
-	out = &model.DashboardSummary{}
+	return utils.GetOrLoad(
+		ctx,
+		utils.DashboardSummaryCacheKey(userId),
+		utils.CacheTTL.Dashboard,
+		func(ctx context.Context) (*model.DashboardSummary, error) {
+			return s.loadDashboardSummaryFromDB(ctx, userId)
+		},
+	)
+}
+
+// loadDashboardSummaryFromDB fetches dashboard summary directly from the database.
+func (s *sDashboard) loadDashboardSummaryFromDB(ctx context.Context, userId string) (*model.DashboardSummary, error) {
+	out := &model.DashboardSummary{}
 
 	// Get all ASSET type accounts and sum their balances using MoneyHelper
 	var assetAccounts []entity.Accounts
-	err = dao.Accounts.Ctx(ctx).
+	err := dao.Accounts.Ctx(ctx).
 		Where(dao.Accounts.Columns().UserId, userId).
 		Where(dao.Accounts.Columns().Type, utils.AccountTypeAsset).
 		Where(dao.Accounts.Columns().IsGroup, false).
@@ -103,11 +116,24 @@ func (s *sDashboard) GetDashboardSummary(ctx context.Context) (out *model.Dashbo
 	return out, nil
 }
 
-// GetMonthlyStats calculates income and expense for the current month
+// GetMonthlyStats calculates income and expense for the current month.
+// Results are cached with a short TTL for performance.
 func (s *sDashboard) GetMonthlyStats(ctx context.Context) (out *model.MonthlyStats, err error) {
 	userId := utils.RequireUserId(ctx)
 
-	out = &model.MonthlyStats{}
+	return utils.GetOrLoad(
+		ctx,
+		utils.DashboardMonthlyCacheKey(userId),
+		utils.CacheTTL.Dashboard,
+		func(ctx context.Context) (*model.MonthlyStats, error) {
+			return s.loadMonthlyStatsFromDB(ctx, userId)
+		},
+	)
+}
+
+// loadMonthlyStatsFromDB fetches monthly stats directly from the database.
+func (s *sDashboard) loadMonthlyStatsFromDB(ctx context.Context, userId string) (*model.MonthlyStats, error) {
+	out := &model.MonthlyStats{}
 
 	// Get start and end of current month
 	now := time.Now()
@@ -116,7 +142,7 @@ func (s *sDashboard) GetMonthlyStats(ctx context.Context) (out *model.MonthlySta
 
 	// Get all INCOME transactions this month
 	var incomeTransactions []entity.Transactions
-	err = dao.Transactions.Ctx(ctx).
+	err := dao.Transactions.Ctx(ctx).
 		Where(dao.Transactions.Columns().UserId, userId).
 		Where(dao.Transactions.Columns().Type, utils.TransactionTypeIncome).
 		WhereBetween(dao.Transactions.Columns().Date, startOfMonth, endOfMonth).

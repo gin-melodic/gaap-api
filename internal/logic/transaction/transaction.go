@@ -124,6 +124,10 @@ func (s *sTransaction) CreateTransaction(ctx context.Context, in model.Transacti
 		transactionTx.Commit()
 	}
 
+	// Invalidate related account caches (balance may have changed)
+	_ = utils.InvalidateCache(ctx, utils.AccountCacheKey(in.FromAccountId.String()))
+	_ = utils.InvalidateCache(ctx, utils.AccountCacheKey(in.ToAccountId.String()))
+
 	// Retrieve the created transaction
 	var e entity.Transactions
 	err = dao.Transactions.Ctx(ctx).Where(dao.Transactions.Columns().Id, newId).Scan(&e)
@@ -134,15 +138,28 @@ func (s *sTransaction) CreateTransaction(ctx context.Context, in model.Transacti
 	return &e, nil
 }
 
+// GetTransaction returns a transaction by ID with caching.
 func (s *sTransaction) GetTransaction(ctx context.Context, id uuid.UUID) (out *entity.Transactions, err error) {
 	userId := utils.RequireUserId(ctx)
 
+	return utils.GetOrLoad(
+		ctx,
+		utils.TransactionCacheKey(id.String()),
+		utils.CacheTTL.Transaction,
+		func(ctx context.Context) (*entity.Transactions, error) {
+			return s.loadTransactionFromDB(ctx, id, userId)
+		},
+	)
+}
+
+// loadTransactionFromDB fetches a transaction directly from the database.
+func (s *sTransaction) loadTransactionFromDB(ctx context.Context, id uuid.UUID, userId string) (*entity.Transactions, error) {
 	var e entity.Transactions
 	m := dao.Transactions.Ctx(ctx).Where(dao.Transactions.Columns().Id, id)
 	if userId != "" {
 		m = m.Where(dao.Transactions.Columns().UserId, userId)
 	}
-	err = m.Scan(&e)
+	err := m.Scan(&e)
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to get transaction")
 	}
@@ -246,6 +263,9 @@ func (s *sTransaction) UpdateTransaction(ctx context.Context, id uuid.UUID, in m
 		return nil, err
 	}
 
+	// Invalidate transaction cache and related account caches
+	_ = utils.InvalidateCache(ctx, utils.TransactionCacheKey(id.String()))
+
 	return s.GetTransaction(ctx, id)
 }
 
@@ -278,6 +298,11 @@ func (s *sTransaction) DeleteTransaction(ctx context.Context, id uuid.UUID) (err
 
 		return nil
 	})
+
+	if err == nil {
+		// Invalidate transaction cache
+		_ = utils.InvalidateCache(ctx, utils.TransactionCacheKey(id.String()))
+	}
 
 	return err
 }

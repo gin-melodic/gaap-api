@@ -23,28 +23,41 @@ func New() *sUser {
 	return &sUser{}
 }
 
+// GetUserProfile returns the current user's profile with caching.
 func (s *sUser) GetUserProfile(ctx context.Context) (out *model.UserProfile, err error) {
 	userId := utils.RequireUserId(ctx)
 
+	return utils.GetOrLoad(
+		ctx,
+		utils.UserCacheKey(userId),
+		utils.CacheTTL.User,
+		func(ctx context.Context) (*model.UserProfile, error) {
+			return s.loadUserProfileFromDB(ctx, userId)
+		},
+	)
+}
+
+// loadUserProfileFromDB fetches the user profile directly from the database.
+func (s *sUser) loadUserProfileFromDB(ctx context.Context, userId string) (*model.UserProfile, error) {
 	var user *entity.Users
-	err = dao.Users.Ctx(ctx).Where(dao.Users.Columns().Id, userId).Scan(&user)
+	err := dao.Users.Ctx(ctx).Where(dao.Users.Columns().Id, userId).Scan(&user)
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to get user")
 	}
 	if user == nil {
 		return nil, gerror.New("user not found")
 	}
-	out = &model.UserProfile{
+	return &model.UserProfile{
 		Email:            user.Email,
 		Nickname:         user.Nickname,
 		Avatar:           user.Avatar,
 		Plan:             user.Plan,
 		TwoFactorEnabled: user.TwoFactorEnabled,
 		MainCurrency:     user.MainCurrency,
-	}
-	return
+	}, nil
 }
 
+// UpdateUserProfile updates the user profile and invalidates the cache.
 func (s *sUser) UpdateUserProfile(ctx context.Context, in model.UserUpdateInput) (out *model.UserProfile, err error) {
 	userId := utils.RequireUserId(ctx)
 
@@ -52,9 +65,14 @@ func (s *sUser) UpdateUserProfile(ctx context.Context, in model.UserUpdateInput)
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to update user profile")
 	}
+
+	// Invalidate cache after update
+	_ = utils.InvalidateCache(ctx, utils.UserCacheKey(userId))
+
 	return s.GetUserProfile(ctx)
 }
 
+// UpdateThemePreference updates the user's theme preference and invalidates the cache.
 func (s *sUser) UpdateThemePreference(ctx context.Context, in model.Theme) (out *model.Theme, err error) {
 	userId := utils.RequireUserId(ctx)
 
@@ -69,6 +87,9 @@ func (s *sUser) UpdateThemePreference(ctx context.Context, in model.Theme) (out 
 	}
 
 	_, err = dao.Users.Ctx(ctx).Where(dao.Users.Columns().Id, userId).Data(g.Map{dao.Users.Columns().ThemeId: theme.Id}).Update()
+
+	// Invalidate cache after update
+	_ = utils.InvalidateCache(ctx, utils.UserCacheKey(userId))
 
 	// Return the updated theme
 	out = &model.Theme{

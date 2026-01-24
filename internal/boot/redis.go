@@ -38,5 +38,14 @@ func InitRedis(ctx context.Context) {
 	// Register ale redis
 	gredis.SetConfig(commonConfig, redis.RedisTypeAle)
 
+	// Register cache Redis (using DB1 for isolation)
+	cacheConfig := &gredis.Config{
+		Address:     address,
+		Pass:        pass,
+		Db:          1,
+		IdleTimeout: 600,
+	}
+	gredis.SetConfig(cacheConfig, redis.RedisTypeCache)
+
 	g.Log().Info(ctx, "Redis initialized successfully")
 }

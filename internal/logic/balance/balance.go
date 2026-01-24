@@ -209,6 +209,9 @@ func (s *sBalance) updateBalanceInTx(ctx context.Context, dbTx gdb.TX, accountId
 		return gerror.Wrapf(err, "failed to update balance for account %s", accountId)
 	}
 
+	// Invalidate account cache after balance update to ensure cache consistency
+	_ = utils.InvalidateCache(ctx, utils.AccountCacheKey(accountId.String()))
+
 	g.Log().Debugf(ctx, "Successfully updated balance for account %s to (%d,%d)", accountId, newUnits, newNanos)
 	return nil
 }

@@ -151,10 +151,26 @@ func (s *sAccount) CreateAccount(ctx context.Context, in model.AccountCreateInpu
 		return nil, err
 	}
 
+	// Invalidate cache for the new account
+	_ = utils.InvalidateCache(ctx, utils.AccountCacheKey(newId.String()))
+
 	return &e, nil
 }
 
+// GetAccount returns an account by ID with caching.
 func (s *sAccount) GetAccount(ctx context.Context, id uuid.UUID) (out *entity.Accounts, err error) {
+	return utils.GetOrLoad(
+		ctx,
+		utils.AccountCacheKey(id.String()),
+		utils.CacheTTL.Account,
+		func(ctx context.Context) (*entity.Accounts, error) {
+			return s.loadAccountFromDB(ctx, id)
+		},
+	)
+}
+
+// loadAccountFromDB fetches an account directly from the database with verification.
+func (s *sAccount) loadAccountFromDB(ctx context.Context, id uuid.UUID) (*entity.Accounts, error) {
 	return utils.GetAndVerify(ctx, utils.AccountAccessor, id)
 }
 
@@ -174,8 +190,9 @@ func (s *sAccount) UpdateAccount(ctx context.Context, id uuid.UUID, in model.Acc
 		return nil, gerror.New("account does not belong to user")
 	}
 
-	// Restrict balance update for EXPENSE and INCOME accounts
-	if (existing.Type == utils.AccountTypeExpense || existing.Type == utils.AccountTypeIncome) && (in.BalanceUnits != nil || in.BalanceNanos != nil) {
+	// Restrict balance update for EXPENSE, INCOME, and EQUITY accounts
+	// These account types should only have their balances modified through transactions
+	if (existing.Type == utils.AccountTypeExpense || existing.Type == utils.AccountTypeIncome || existing.Type == utils.AccountTypeEquity) && (in.BalanceUnits != nil || in.BalanceNanos != nil) {
 		return nil, gerror.New("cannot manually update balance for " + gconv.String(existing.Type) + " accounts")
 	}
 
@@ -268,6 +285,9 @@ func (s *sAccount) UpdateAccount(ctx context.Context, id uuid.UUID, in model.Acc
 		return nil, err
 	}
 
+	// Invalidate cache after update
+	_ = utils.InvalidateCache(ctx, utils.AccountCacheKey(id.String()))
+
 	return s.GetAccount(ctx, id)
 }
 
@@ -323,6 +343,13 @@ func (s *sAccount) DeleteAccount(ctx context.Context, id uuid.UUID, migrationTar
 		if err = directDeleteAccount(ctx, dbTx, *account, true); err != nil {
 			return "", gerror.Wrapf(err, "failed to delete account %s", account.Name)
 		}
+
+		// Invalidate cache for deleted account and its children
+		_ = utils.InvalidateCache(ctx, utils.AccountCacheKey(id.String()))
+		for _, childId := range childAccountIds {
+			_ = utils.InvalidateCache(ctx, utils.AccountCacheKey(childId.String()))
+		}
+
 		return "", nil
 	}
 

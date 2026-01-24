@@ -61,16 +61,28 @@ func (s *sTask) ListTasks(ctx context.Context, in model.TaskQueryInput) (out []m
 	return
 }
 
-// GetTask returns a single task by ID
+// GetTask returns a single task by ID with caching.
 func (s *sTask) GetTask(ctx context.Context, id uuid.UUID) (out *model.TaskOutput[any, any], err error) {
 	userId := utils.RequireUserId(ctx)
 
+	return utils.GetOrLoad(
+		ctx,
+		utils.TaskCacheKey(id.String()),
+		utils.CacheTTL.Task,
+		func(ctx context.Context) (*model.TaskOutput[any, any], error) {
+			return s.loadTaskFromDB(ctx, id, userId)
+		},
+	)
+}
+
+// loadTaskFromDB fetches a task directly from the database.
+func (s *sTask) loadTaskFromDB(ctx context.Context, id uuid.UUID, userId string) (*model.TaskOutput[any, any], error) {
 	var e entity.Tasks
 	m := dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, id)
 	if userId != "" {
 		m = m.Where(dao.Tasks.Columns().UserId, userId)
 	}
-	err = m.Scan(&e)
+	err := m.Scan(&e)
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to get task")
 	}
@@ -156,6 +168,10 @@ func (s *sTask) CancelTask(ctx context.Context, id uuid.UUID) error {
 	if err != nil {
 		return gerror.Wrap(err, "failed to cancel task")
 	}
+
+	// Invalidate cache after status change
+	_ = utils.InvalidateCache(ctx, utils.TaskCacheKey(id.String()))
+
 	return nil
 }
 
@@ -183,7 +199,6 @@ func (s *sTask) RetryTask(ctx context.Context, id uuid.UUID) (*model.TaskOutput[
 		return nil, gerror.New("task queue is not available, please try again later")
 	}
 
-	// Reset task status to pending
 	_, err = dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, id).Data(entity.Tasks{
 		Status:         model.TaskStatusPending,
 		Progress:       0,
@@ -192,6 +207,9 @@ func (s *sTask) RetryTask(ctx context.Context, id uuid.UUID) (*model.TaskOutput[
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to reset task")
 	}
+
+	// Invalidate cache after status change
+	_ = utils.InvalidateCache(ctx, utils.TaskCacheKey(id.String()))
 
 	// Re-publish to RabbitMQ
 	msgPayload := g.Map{
@@ -223,6 +241,10 @@ func (s *sTask) UpdateTaskProgress(ctx context.Context, id uuid.UUID, progress i
 	if err != nil {
 		return gerror.Wrap(err, "failed to update task progress")
 	}
+
+	// Invalidate cache after progress update
+	_ = utils.InvalidateCache(ctx, utils.TaskCacheKey(id.String()))
+
 	return nil
 }
 
@@ -238,6 +260,9 @@ func (s *sTask) CompleteTask(ctx context.Context, id uuid.UUID, result interface
 	if err != nil {
 		return gerror.Wrap(err, "failed to complete task")
 	}
+
+	// Invalidate cache after status change
+	_ = utils.InvalidateCache(ctx, utils.TaskCacheKey(id.String()))
 
 	// Broadcast task update via WebSocket
 	s.broadcastTaskUpdate(ctx, id, model.TaskStatusCompleted, result)
@@ -256,6 +281,9 @@ func (s *sTask) FailTask(ctx context.Context, id uuid.UUID, errMsg string) error
 	if err != nil {
 		return gerror.Wrap(err, "failed to mark task as failed")
 	}
+
+	// Invalidate cache after status change
+	_ = utils.InvalidateCache(ctx, utils.TaskCacheKey(id.String()))
 
 	// Broadcast task update via WebSocket
 	s.broadcastTaskUpdate(ctx, id, model.TaskStatusFailed, result)
