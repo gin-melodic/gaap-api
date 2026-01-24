@@ -63,7 +63,7 @@ func (s *sData) Export(ctx context.Context, in model.DataExportInput) (*model.Da
 	}
 
 	// Create export task
-	task, err := service.Task().CreateTask(ctx, model.TaskCreateInput{
+	task, err := service.Task().CreateTask(ctx, model.TaskCreateInput[any]{
 		UserId: userId,
 		Type:   model.TaskTypeDataExport,
 		Payload: model.DataExportPayload{
@@ -123,7 +123,7 @@ func (s *sData) Import(ctx context.Context, in model.DataImportInput) (*model.Da
 	}
 
 	// Create import task
-	task, err := service.Task().CreateTask(ctx, model.TaskCreateInput{
+	task, err := service.Task().CreateTask(ctx, model.TaskCreateInput[any]{
 		UserId: userId,
 		Type:   model.TaskTypeDataImport,
 		Payload: model.DataImportPayload{
@@ -196,7 +196,7 @@ func (s *sData) Download(ctx context.Context, in model.DataDownloadInput, r *ght
 }
 
 // GetExportStatus returns the status of an export task
-func (s *sData) GetExportStatus(ctx context.Context, taskId uuid.UUID) (*model.Task, error) {
+func (s *sData) GetExportStatus(ctx context.Context, taskId uuid.UUID) (*model.TaskOutput[any, any], error) {
 	userIdStr := utils.RequireUserId(ctx)
 	userId, err := uuid.Parse(userIdStr)
 	if err != nil {

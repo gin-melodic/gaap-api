@@ -338,7 +338,7 @@ func (s *sAccount) DeleteAccount(ctx context.Context, id uuid.UUID, migrationTar
 		MigrationTargets: migrationTargets,
 	}
 
-	task, err := service.Task().CreateTask(ctx, model.TaskCreateInput{
+	task, err := service.Task().CreateTask(ctx, model.TaskCreateInput[any]{
 		UserId:  account.UserId,
 		Type:    model.TaskTypeAccountMigration,
 		Payload: payload,

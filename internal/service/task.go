@@ -15,15 +15,15 @@ import (
 type (
 	ITask interface {
 		// ListTasks returns a list of tasks for the current user
-		ListTasks(ctx context.Context, in model.TaskQueryInput) (out []model.Task, total int, err error)
+		ListTasks(ctx context.Context, in model.TaskQueryInput) (out []model.TaskOutput[any, any], total int, err error)
 		// GetTask returns a single task by ID
-		GetTask(ctx context.Context, id uuid.UUID) (out *model.Task, err error)
+		GetTask(ctx context.Context, id uuid.UUID) (out *model.TaskOutput[any, any], err error)
 		// CreateTask creates a new task and publishes it to the queue
-		CreateTask(ctx context.Context, in model.TaskCreateInput) (out *model.Task, err error)
+		CreateTask(ctx context.Context, in model.TaskCreateInput[any]) (out *model.TaskOutput[any, any], err error)
 		// CancelTask cancels a pending or running task
 		CancelTask(ctx context.Context, id uuid.UUID) error
 		// RetryTask retries a failed task
-		RetryTask(ctx context.Context, id uuid.UUID) (*model.Task, error)
+		RetryTask(ctx context.Context, id uuid.UUID) (*model.TaskOutput[any, any], error)
 		// UpdateTaskProgress updates task progress
 		UpdateTaskProgress(ctx context.Context, id uuid.UUID, progress int, processedItems int) error
 		// CompleteTask marks a task as completed

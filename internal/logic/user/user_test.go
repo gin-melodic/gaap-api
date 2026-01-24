@@ -49,9 +49,9 @@ func Test_User_Suite(t *testing.T) {
 		// Note: gdb has already cached users metadata from step 1, no need for MockMeta again
 
 		// It updates users table.
-		// gdb updates nickname, avatar, plan, updated_at + WHERE id = userId (5 args)
+		// gdb updates nickname, avatar, plan, main_currency, updated_at + WHERE id = userId (6 args)
 		mock.ExpectExec("UPDATE \"?users\"? SET").
-			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
 		// Then it calls GetUserProfile to return updated profile

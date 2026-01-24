@@ -1,6 +1,9 @@
 package model
 
-import "github.com/google/uuid"
+import (
+	"github.com/gogf/gf/v2/os/gtime"
+	"github.com/google/uuid"
+)
 
 // Task status constants
 type TaskStatus = int
@@ -24,11 +27,21 @@ const (
 	TaskTypeDataImport
 )
 
+// TaskPayload constraint for task payloads
+type TaskPayload interface {
+	AccountMigrationPayload | DataExportPayload | DataImportPayload | any
+}
+
+// TaskResult constraint for task results
+type TaskResult interface {
+	AccountMigrationResult | DataExportResult | DataImportResult | any
+}
+
 // TaskCreateInput for creating a new task
-type TaskCreateInput struct {
-	UserId  uuid.UUID   `orm:"user_id"`
-	Type    TaskType    `orm:"type"`
-	Payload interface{} `orm:"payload"`
+type TaskCreateInput[T TaskPayload] struct {
+	UserId  uuid.UUID `orm:"user_id"`
+	Type    TaskType  `orm:"type"`
+	Payload T         `orm:"payload"`
 }
 
 // TaskQueryInput for querying tasks
@@ -91,19 +104,19 @@ type DataImportResult struct {
 	Error                string `json:"error,omitempty"`
 }
 
-// Task model for API responses
-type Task struct {
+// TaskOutput model for API responses
+type TaskOutput[P TaskPayload, R TaskResult] struct {
 	Id             uuid.UUID   `json:"id"`
 	UserId         uuid.UUID   `json:"userId"`
 	Type           TaskType    `json:"type"`
 	Status         TaskStatus  `json:"status"`
-	Payload        interface{} `json:"payload"`
-	Result         interface{} `json:"result"`
+	Payload        P           `json:"payload"`
+	Result         R           `json:"result"`
 	Progress       int         `json:"progress"`
 	TotalItems     int         `json:"totalItems"`
 	ProcessedItems int         `json:"processedItems"`
-	StartedAt      interface{} `json:"startedAt"`
-	CompletedAt    interface{} `json:"completedAt"`
-	CreatedAt      interface{} `json:"createdAt"`
-	UpdatedAt      interface{} `json:"updatedAt"`
+	StartedAt      *gtime.Time `json:"startedAt"`
+	CompletedAt    *gtime.Time `json:"completedAt"`
+	CreatedAt      *gtime.Time `json:"createdAt"`
+	UpdatedAt      *gtime.Time `json:"updatedAt"`
 }

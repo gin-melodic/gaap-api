@@ -22,7 +22,7 @@ type (
 		// Download serves the export file for download
 		Download(ctx context.Context, in model.DataDownloadInput, r *ghttp.Request) error
 		// GetExportStatus returns the status of an export task
-		GetExportStatus(ctx context.Context, taskId uuid.UUID) (*model.Task, error)
+		GetExportStatus(ctx context.Context, taskId uuid.UUID) (*model.TaskOutput[any, any], error)
 	}
 )
 

@@ -13,7 +13,7 @@ import (
 )
 
 // taskToProto converts model.Task to protobuf v1.Task
-func taskToProto(t *model.Task) *v1.Task {
+func taskToProto(t *model.TaskOutput[any, any]) *v1.Task {
 	if t == nil {
 		return nil
 	}
@@ -43,7 +43,7 @@ func taskToProto(t *model.Task) *v1.Task {
 }
 
 // tasksToProtos converts slice of model.Task to slice of protobuf v1.Task
-func tasksToProtos(tasks []model.Task) []*v1.Task {
+func tasksToProtos(tasks []model.TaskOutput[any, any]) []*v1.Task {
 	result := make([]*v1.Task, len(tasks))
 	for i := range tasks {
 		result[i] = taskToProto(&tasks[i])

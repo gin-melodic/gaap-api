@@ -37,7 +37,7 @@ func (c *ControllerV1) GfGetExportStatus(ctx context.Context, req *v1.GfGetExpor
 }
 
 // modelTaskToProto converts model.Task to protobuf taskV1.Task
-func modelTaskToProto(t *model.Task) *taskV1.Task {
+func modelTaskToProto(t *model.TaskOutput[any, any]) *taskV1.Task {
 	if t == nil {
 		return nil
 	}
