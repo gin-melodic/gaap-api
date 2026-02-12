@@ -23,6 +23,12 @@ func Test_Dashboard_GetDashboardSummary(t *testing.T) {
 		userId := uuid.New().String()
 		ctx := context.WithValue(context.Background(), middleware.UserIdKey, userId)
 
+		// 1. Expectation for Snapshot cache miss (DB query)
+		testutil.MockMeta(mock, "dashboard_snapshots", []string{"id", "user_id", "snapshot_type", "snapshot_key", "data", "updated_at"})
+		mock.ExpectQuery("SELECT .* FROM \"?dashboard_snapshots\"?.*").
+			WithArgs(userId, "summary", "").
+			WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "snapshot_type", "snapshot_key", "data"})) // Empty result set
+
 		// Expectation for Assets (SELECT * FROM accounts WHERE type=Asset)
 		testutil.MockMeta(mock, "accounts", []string{"id", "balance_units", "balance_nanos", "currency_code", "type", "is_group"})
 
@@ -62,8 +68,16 @@ func Test_Dashboard_GetDashboardSummary(t *testing.T) {
 func Test_Dashboard_GetMonthlyStats(t *testing.T) {
 	gtest.C(t, func(g *gtest.T) {
 		mock, _ := testutil.InitMockDB(t)
+		testutil.MockDBInit(mock)
 		userId := uuid.New().String()
 		ctx := context.WithValue(context.Background(), middleware.UserIdKey, userId)
+
+		// 1. Expectation for Snapshot cache miss (DB query)
+		monthKey := time.Now().Format("2006-01")
+		testutil.MockMeta(mock, "dashboard_snapshots", []string{"id", "user_id", "snapshot_type", "snapshot_key", "data", "updated_at"})
+		mock.ExpectQuery("SELECT .* FROM \"?dashboard_snapshots\"?.*").
+			WithArgs(userId, "monthly", monthKey).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "snapshot_type", "snapshot_key", "data"})) // Empty result set
 
 		// GoFrame executes metadata queries first for the transactions table
 		testutil.MockMeta(mock, "transactions", []string{"id", "balance_units", "balance_nanos", "currency_code", "type", "date"})

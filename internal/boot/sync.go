@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"gaap-api/internal/dao"
+	"gaap-api/internal/logic/dashboard"
 	"gaap-api/internal/logic/utils"
 	"gaap-api/internal/model/entity"
 	"gaap-api/internal/redis"
@@ -52,6 +53,9 @@ func SyncBalances(ctx context.Context) {
 	}
 
 	g.Log().Info(ctx, "Balance synchronization completed successfully.")
+
+	// After balance sync, warm dashboard snapshots for all users
+	go WarmDashboardSnapshots(ctx)
 }
 
 // acquireDistributedLock tries to acquire a Redis distributed lock.
@@ -245,4 +249,40 @@ func calculateExpectedBalance(accountId string) (*utils.MoneyHelper, error) {
 	}
 
 	return balance, nil
+}
+
+// WarmDashboardSnapshots pre-builds dashboard Redis snapshots for all users.
+// Called once at startup after balance sync to ensure first dashboard load is instant.
+// On cold start, it tries restoring from DB first (fast) and only falls back to
+// full recompute if no persisted snapshot exists.
+func WarmDashboardSnapshots(ctx context.Context) {
+	g.Log().Info(ctx, "Warming dashboard snapshots for all users...")
+
+	var users []struct {
+		Id string `orm:"id"`
+	}
+	err := g.DB().Model("users").Fields("id").Scan(&users)
+	if err != nil {
+		g.Log().Warningf(ctx, "Failed to query users for dashboard warmup: %v", err)
+		return
+	}
+
+	restoredCount := 0
+	rebuiltCount := 0
+	for _, u := range users {
+		// Try fast path: restore from DB snapshot
+		restored := dashboard.RestoreSnapshotsFromDB(ctx, u.Id)
+		if restored {
+			restoredCount++
+			continue
+		}
+		// Slow path: full recompute from transactional data
+		if err := dashboard.RebuildSnapshots(ctx, u.Id); err != nil {
+			g.Log().Warningf(ctx, "Failed to warm dashboard snapshot for user %s: %v", u.Id, err)
+		}
+		rebuiltCount++
+	}
+
+	g.Log().Infof(ctx, "Dashboard warmup completed: %d users (%d restored from DB, %d rebuilt)",
+		len(users), restoredCount, rebuiltCount)
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"gaap-api/internal/dao"
+	"gaap-api/internal/logic/dashboard"
 	"gaap-api/internal/logic/utils"
 	"gaap-api/internal/model"
 	"gaap-api/internal/model/entity"
@@ -59,6 +60,11 @@ func (s *sTask) processAccountMigration(ctx context.Context, payload json.RawMes
 	if err != nil {
 		s.FailTask(ctx, taskId, err.Error())
 		return err
+	}
+
+	// Trigger dashboard snapshot rebuild after migration completes
+	if migrationPayload.Payload != nil {
+		dashboard.PublishDashboardRefresh(ctx, migrationPayload.Payload.UserId.String(), "account_migration")
 	}
 
 	return s.CompleteTask(ctx, taskId, result)

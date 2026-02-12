@@ -6,6 +6,7 @@ import (
 
 	"gaap-api/internal/dao"
 	"gaap-api/internal/dataimport"
+	"gaap-api/internal/logic/dashboard"
 	"gaap-api/internal/model"
 	"gaap-api/internal/model/entity"
 
@@ -50,6 +51,11 @@ func (s *sTask) processDataImport(ctx context.Context, payload json.RawMessage) 
 	if err != nil {
 		s.FailTask(ctx, taskId, err.Error())
 		return err
+	}
+
+	// Trigger dashboard snapshot rebuild after import (bulk transactions created)
+	if importPayload.UserId != uuid.Nil {
+		dashboard.PublishDashboardRefresh(ctx, importPayload.UserId.String(), "data_import")
 	}
 
 	return s.CompleteTask(ctx, taskId, importResult)

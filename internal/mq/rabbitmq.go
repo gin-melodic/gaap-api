@@ -42,7 +42,8 @@ var (
 
 // Queue names
 const (
-	QueueTasks = "gaap.tasks"
+	QueueTasks     = "gaap.tasks"
+	QueueDashboard = "gaap.dashboard"
 )
 
 // GetRabbitMQ returns singleton RabbitMQ client
@@ -129,16 +130,18 @@ func (r *RabbitMQ) tryConnect(ctx context.Context) error {
 	}
 
 	// Declare queues
-	_, err = r.channel.QueueDeclare(
-		QueueTasks, // name
-		true,       // durable
-		false,      // delete when unused
-		false,      // exclusive
-		false,      // no-wait
-		nil,        // arguments
-	)
-	if err != nil {
-		return fmt.Errorf("failed to declare queue: %w", err)
+	for _, queueName := range []string{QueueTasks, QueueDashboard} {
+		_, err = r.channel.QueueDeclare(
+			queueName, // name
+			true,      // durable
+			false,     // delete when unused
+			false,     // exclusive
+			false,     // no-wait
+			nil,       // arguments
+		)
+		if err != nil {
+			return fmt.Errorf("failed to declare queue %s: %w", queueName, err)
+		}
 	}
 
 	return nil

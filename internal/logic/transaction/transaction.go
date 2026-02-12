@@ -3,6 +3,7 @@ package transaction
 import (
 	"context"
 	"gaap-api/internal/dao"
+	"gaap-api/internal/logic/dashboard"
 	"gaap-api/internal/logic/utils"
 	"gaap-api/internal/model"
 	"gaap-api/internal/model/entity"
@@ -127,6 +128,9 @@ func (s *sTransaction) CreateTransaction(ctx context.Context, in model.Transacti
 	// Invalidate related account caches (balance may have changed)
 	_ = utils.InvalidateCache(ctx, utils.AccountCacheKey(in.FromAccountId.String()))
 	_ = utils.InvalidateCache(ctx, utils.AccountCacheKey(in.ToAccountId.String()))
+
+	// Trigger asynchronous dashboard snapshot rebuild
+	dashboard.PublishDashboardRefresh(ctx, in.UserId.String(), "tx_create")
 
 	// Retrieve the created transaction
 	var e entity.Transactions
@@ -266,6 +270,9 @@ func (s *sTransaction) UpdateTransaction(ctx context.Context, id uuid.UUID, in m
 	// Invalidate transaction cache and related account caches
 	_ = utils.InvalidateCache(ctx, utils.TransactionCacheKey(id.String()))
 
+	// Trigger asynchronous dashboard snapshot rebuild
+	dashboard.PublishDashboardRefresh(ctx, userId, "tx_update")
+
 	return s.GetTransaction(ctx, id)
 }
 
@@ -302,6 +309,9 @@ func (s *sTransaction) DeleteTransaction(ctx context.Context, id uuid.UUID) (err
 	if err == nil {
 		// Invalidate transaction cache
 		_ = utils.InvalidateCache(ctx, utils.TransactionCacheKey(id.String()))
+
+		// Trigger asynchronous dashboard snapshot rebuild
+		dashboard.PublishDashboardRefresh(ctx, userId, "tx_delete")
 	}
 
 	return err

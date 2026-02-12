@@ -24,19 +24,12 @@ func New() *sDashboard {
 	return &sDashboard{}
 }
 
-// GetDashboardSummary calculates total assets, liabilities, and net worth for the current user.
-// Results are cached with a short TTL for performance.
+// GetDashboardSummary returns the dashboard summary from a Redis snapshot.
+// The snapshot is pre-computed asynchronously via RabbitMQ whenever transactions
+// or account balances change. Falls back to DB computation on cold start / cache miss.
 func (s *sDashboard) GetDashboardSummary(ctx context.Context) (out *model.DashboardSummary, err error) {
 	userId := utils.RequireUserId(ctx)
-
-	return utils.GetOrLoad(
-		ctx,
-		utils.DashboardSummaryCacheKey(userId),
-		utils.CacheTTL.Dashboard,
-		func(ctx context.Context) (*model.DashboardSummary, error) {
-			return s.loadDashboardSummaryFromDB(ctx, userId)
-		},
-	)
+	return GetSummarySnapshot(ctx, userId)
 }
 
 // loadDashboardSummaryFromDB fetches dashboard summary directly from the database.
@@ -116,19 +109,10 @@ func (s *sDashboard) loadDashboardSummaryFromDB(ctx context.Context, userId stri
 	return out, nil
 }
 
-// GetMonthlyStats calculates income and expense for the current month.
-// Results are cached with a short TTL for performance.
+// GetMonthlyStats returns the monthly income/expense from a Redis snapshot.
 func (s *sDashboard) GetMonthlyStats(ctx context.Context) (out *model.MonthlyStats, err error) {
 	userId := utils.RequireUserId(ctx)
-
-	return utils.GetOrLoad(
-		ctx,
-		utils.DashboardMonthlyCacheKey(userId),
-		utils.CacheTTL.Dashboard,
-		func(ctx context.Context) (*model.MonthlyStats, error) {
-			return s.loadMonthlyStatsFromDB(ctx, userId)
-		},
-	)
+	return GetMonthlySnapshot(ctx, userId)
 }
 
 // loadMonthlyStatsFromDB fetches monthly stats directly from the database.
@@ -213,184 +197,8 @@ func (s *sDashboard) loadMonthlyStatsFromDB(ctx context.Context, userId string) 
 	return out, nil
 }
 
-// GetBalanceTrend returns daily balance snapshots for specified accounts
+// GetBalanceTrend returns daily balance snapshots from Redis.
 func (s *sDashboard) GetBalanceTrend(ctx context.Context, accounts []uuid.UUID) (out []model.DailyBalance, err error) {
 	userId := utils.RequireUserId(ctx)
-
-	// Default to last 30 days
-	now := time.Now()
-	endDate := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 999999999, now.Location())
-	startDate := endDate.AddDate(0, 0, -29)
-	startOfDay := time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, startDate.Location())
-
-	// If no specific accounts requested, get all user's non-group accounts
-	if len(accounts) == 0 {
-		var userAccounts []entity.Accounts
-		err = dao.Accounts.Ctx(ctx).
-			Where(dao.Accounts.Columns().UserId, userId).
-			Where(dao.Accounts.Columns().IsGroup, false).
-			WhereNull(dao.Accounts.Columns().DeletedAt).
-			Fields(dao.Accounts.Columns().Id).
-			Scan(&userAccounts)
-		if err != nil {
-			return nil, gerror.Wrap(err, "failed to get user accounts")
-		}
-		for _, acc := range userAccounts {
-			accounts = append(accounts, acc.Id)
-		}
-	}
-
-	if len(accounts) == 0 {
-		return []model.DailyBalance{}, nil
-	}
-
-	// 1. Get CURRENT balances for these accounts
-	type AccountBalance struct {
-		Id           uuid.UUID
-		BalanceUnits int64
-		BalanceNanos int
-		CurrencyCode string
-	}
-	currentBalances := make(map[uuid.UUID]AccountBalance)
-	var accountRecs []entity.Accounts
-	err = dao.Accounts.Ctx(ctx).
-		WhereIn(dao.Accounts.Columns().Id, accounts).
-		Where(dao.Accounts.Columns().UserId, userId).
-		Scan(&accountRecs)
-	if err != nil {
-		return nil, gerror.Wrap(err, "failed to get account balances")
-	}
-	for _, acc := range accountRecs {
-		currentBalances[acc.Id] = AccountBalance{
-			Id:           acc.Id,
-			BalanceUnits: acc.BalanceUnits,
-			BalanceNanos: acc.BalanceNanos,
-			CurrencyCode: acc.CurrencyCode,
-		}
-	}
-
-	// 2. Get ALL transactions for these accounts from startDate to NOW
-	var fromTrans []entity.Transactions
-	var toTrans []entity.Transactions
-
-	err = dao.Transactions.Ctx(ctx).
-		WhereIn(dao.Transactions.Columns().FromAccountId, accounts).
-		WhereGTE(dao.Transactions.Columns().Date, startOfDay).
-		Limit(10000).
-		Scan(&fromTrans)
-	if err != nil {
-		return nil, gerror.Wrap(err, "failed to get from transactions")
-	}
-
-	err = dao.Transactions.Ctx(ctx).
-		WhereIn(dao.Transactions.Columns().ToAccountId, accounts).
-		WhereGTE(dao.Transactions.Columns().Date, startOfDay).
-		Limit(10000).
-		Scan(&toTrans)
-	if err != nil {
-		return nil, gerror.Wrap(err, "failed to get to transactions")
-	}
-
-	// Merge and deduplicate transactions
-	txMap := make(map[uuid.UUID]entity.Transactions)
-	for _, t := range fromTrans {
-		txMap[t.Id] = t
-	}
-	for _, t := range toTrans {
-		txMap[t.Id] = t
-	}
-
-	transactions := make([]entity.Transactions, 0, len(txMap))
-	for _, t := range txMap {
-		transactions = append(transactions, t)
-	}
-
-	// Create a map of Date -> Transactions
-	transactionsByDate := make(map[string][]entity.Transactions)
-	for _, t := range transactions {
-		if t.Date == nil {
-			continue
-		}
-		dateStr := t.Date.Layout("2006-01-02")
-		transactionsByDate[dateStr] = append(transactionsByDate[dateStr], t)
-	}
-
-	// 3. Calculate daily balances BACKWARDS using MoneyHelper
-	runningBalances := make(map[uuid.UUID]*utils.MoneyHelper)
-	for accId, bal := range currentBalances {
-		entity := &entity.Accounts{
-			BalanceUnits: bal.BalanceUnits,
-			BalanceNanos: bal.BalanceNanos,
-			CurrencyCode: bal.CurrencyCode,
-		}
-		runningBalances[accId] = utils.NewFromEntity(entity)
-	}
-
-	dailyMap := make(map[string]map[string]model.DailyAccountBalance)
-
-	cursorDate := endDate
-	for !cursorDate.Before(startOfDay) {
-		dateStr := cursorDate.Format("2006-01-02")
-
-		// Record the balance at the END of this day
-		dayBalances := make(map[string]model.DailyAccountBalance)
-		for accId, bal := range runningBalances {
-			units, nanos := bal.ToEntityValues()
-			dayBalances[accId.String()] = model.DailyAccountBalance{
-				Units:        units,
-				Nanos:        nanos,
-				CurrencyCode: bal.Currency,
-			}
-		}
-		dailyMap[dateStr] = dayBalances
-
-		// Reverse transactions of this day to get start-of-day balances
-		if txs, ok := transactionsByDate[dateStr]; ok {
-			for _, tx := range txs {
-				// Create delta MoneyHelper
-				deltaEntity := &entity.Accounts{
-					BalanceUnits: tx.BalanceUnits,
-					BalanceNanos: tx.BalanceNanos,
-					CurrencyCode: tx.CurrencyCode,
-				}
-				delta := utils.NewFromEntity(deltaEntity)
-
-				// FromAccount: Money left, so add back
-				if bal, ok := runningBalances[tx.FromAccountId]; ok {
-					newBal, _ := bal.Add(delta)
-					if newBal != nil {
-						runningBalances[tx.FromAccountId] = newBal
-					}
-				}
-				// ToAccount: Money entered, so subtract
-				if bal, ok := runningBalances[tx.ToAccountId]; ok {
-					newBal, _ := bal.Sub(delta)
-					if newBal != nil {
-						runningBalances[tx.ToAccountId] = newBal
-					}
-				}
-			}
-		}
-
-		cursorDate = cursorDate.AddDate(0, 0, -1)
-	}
-
-	// 4. Construct final output (sorted by date)
-	out = make([]model.DailyBalance, 0)
-	for d := startOfDay; !d.After(endDate); d = d.AddDate(0, 0, 1) {
-		dateStr := d.Format("2006-01-02")
-		if bals, ok := dailyMap[dateStr]; ok {
-			out = append(out, model.DailyBalance{
-				Date:     dateStr,
-				Balances: bals,
-			})
-		} else {
-			out = append(out, model.DailyBalance{
-				Date:     dateStr,
-				Balances: make(map[string]model.DailyAccountBalance),
-			})
-		}
-	}
-
-	return out, nil
+	return GetTrendSnapshot(ctx, userId, accounts)
 }

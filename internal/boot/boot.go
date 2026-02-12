@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"gaap-api/internal/ale"
+	"gaap-api/internal/logic/dashboard"
 	"gaap-api/internal/mq"
 	"gaap-api/internal/service"
 
@@ -27,6 +28,16 @@ func InitRabbitMQ(ctx context.Context) {
 			g.Log().Errorf(ctx, "Task worker failed: %v", err)
 		}
 	}()
+
+	// Start dashboard snapshot worker to consume dashboard refresh events
+	go func() {
+		if err := dashboard.StartDashboardWorker(ctx); err != nil {
+			g.Log().Errorf(ctx, "Dashboard worker failed: %v", err)
+		}
+	}()
+
+	// Start periodic snapshot flush ticker (Redis → DB persistence)
+	go dashboard.StartSnapshotFlushTicker(ctx)
 }
 
 // Migrate executes database migration and seeding on startup.
@@ -39,7 +50,12 @@ func Migrate(ctx context.Context) {
 	}
 	g.Log().Info(ctx, "Schema migration completed.")
 
-	// 2. Check if seeding is needed (check if users table is empty)
+	// 2. Execute dashboard snapshots table migration
+	if err := executeSqlFile(ctx, "manifest/sql/2025020801_dashboard_snapshots.sql"); err != nil {
+		g.Log().Warningf(ctx, "Failed to execute dashboard snapshots migration: %v", err)
+	}
+
+	// 3. Check if seeding is needed (check if users table is empty)
 	count, err := g.DB().Model("account_types").Count()
 	if err != nil {
 		// If table doesn't exist, it should have been created by schema.sql.

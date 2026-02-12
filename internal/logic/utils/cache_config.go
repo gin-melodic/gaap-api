@@ -2,6 +2,8 @@ package utils
 
 import (
 	"context"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/gogf/gf/v2/frame/g"
@@ -49,21 +51,23 @@ func DashboardMonthlyCacheKey(userId string) string {
 // CacheTTL holds cache expiration durations for different data types.
 // These defaults can be overridden via InitCacheTTL from config.
 var CacheTTL = struct {
-	Config      time.Duration // Configuration data (themes, account types, currencies)
-	User        time.Duration // User profile data
-	Account     time.Duration // Account data
-	Transaction time.Duration // Transaction data
-	Dashboard   time.Duration // Dashboard aggregations
-	Search      time.Duration // Search results
-	Task        time.Duration // Task data
+	Config        time.Duration // Configuration data (themes, account types, currencies)
+	User          time.Duration // User profile data
+	Account       time.Duration // Account data
+	Transaction   time.Duration // Transaction data
+	Dashboard     time.Duration // Dashboard aggregations
+	Search        time.Duration // Search results
+	Task          time.Duration // Task data
+	SnapshotFlush time.Duration // Dashboard snapshot DB flush interval
 }{
-	Config:      time.Hour * 24,   // Config data: 24 hours (rarely changes)
-	User:        time.Hour,        // User data: 1 hour
-	Account:     time.Hour * 2,    // Account data: 2 hours
-	Transaction: time.Minute * 30, // Transaction data: 30 minutes
-	Dashboard:   time.Minute * 5,  // Dashboard: 5 minutes (frequently updated)
-	Search:      time.Minute * 5,  // Search results: 5 minutes
-	Task:        time.Minute * 10, // Task data: 10 minutes
+	Config:        time.Hour * 24,   // Config data: 24 hours (rarely changes)
+	User:          time.Hour,        // User data: 1 hour
+	Account:       time.Hour * 2,    // Account data: 2 hours
+	Transaction:   time.Minute * 30, // Transaction data: 30 minutes
+	Dashboard:     time.Minute * 5,  // Dashboard: 5 minutes (frequently updated)
+	Search:        time.Minute * 5,  // Search results: 5 minutes
+	Task:          time.Minute * 10, // Task data: 10 minutes
+	SnapshotFlush: time.Hour * 24,   // Snapshot flush: T+1 daily (configurable)
 }
 
 // InitCacheTTL loads cache TTL configuration from config file (optional).
@@ -87,7 +91,12 @@ func InitCacheTTL(ctx context.Context) {
 	if ttl := g.Cfg().MustGet(ctx, "cache.search.ttl", 300).Int64(); ttl > 0 {
 		CacheTTL.Search = time.Duration(ttl) * time.Second
 	}
+	if ttlStr := os.Getenv("SNAPSHOT_FLUSH_TTL"); ttlStr != "" {
+		if ttl, err := strconv.ParseInt(ttlStr, 10, 64); err == nil && ttl > 0 {
+			CacheTTL.SnapshotFlush = time.Duration(ttl) * time.Second
+		}
+	}
 
-	g.Log().Debugf(ctx, "Cache TTL initialized: Config=%v, User=%v, Account=%v, Transaction=%v, Dashboard=%v",
-		CacheTTL.Config, CacheTTL.User, CacheTTL.Account, CacheTTL.Transaction, CacheTTL.Dashboard)
+	g.Log().Debugf(ctx, "Cache TTL initialized: Config=%v, User=%v, Account=%v, Transaction=%v, Dashboard=%v, SnapshotFlush=%v",
+		CacheTTL.Config, CacheTTL.User, CacheTTL.Account, CacheTTL.Transaction, CacheTTL.Dashboard, CacheTTL.SnapshotFlush)
 }
