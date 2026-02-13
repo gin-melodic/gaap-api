@@ -19,7 +19,7 @@ func (c *ControllerV1) GfLogout(ctx context.Context, req *v1.GfLogoutReq) (res *
 
 	// Get the token from context and add it to blacklist
 	tokenString := ghttp.RequestFromCtx(ctx).GetHeader("Authorization")
-	if tokenString == "" {
+	if tokenString != "" {
 		service.Auth().AddTokenToBlacklist(ctx, tokenString)
 	}
 
