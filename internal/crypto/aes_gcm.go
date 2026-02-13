@@ -163,7 +163,7 @@ func GetServerSecret() string {
 		secret = os.Getenv("JWT_SECRET")
 	}
 	if secret == "" {
-		g.Log().Fatal(context.Background(), "server secret not found")
+		g.Log().Fatal(context.Background(), "JWT_SECRET environment variable not set and no fallback available")
 	}
 	return secret
 }
