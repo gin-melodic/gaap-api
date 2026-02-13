@@ -12,9 +12,10 @@ import (
 )
 
 func InitRedis(ctx context.Context) {
-	// Check duplicate
+	// Check for existing Redis configuration and return early to avoid re-initializing it.
 	_, ok := gredis.GetConfig()
 	if ok {
+		// Configuration already set; skip re-initialization to prevent overwriting existing Redis settings.
 		return
 	}
 
