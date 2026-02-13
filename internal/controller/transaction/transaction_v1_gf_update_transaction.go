@@ -29,7 +29,7 @@ func (c *ControllerV1) GfUpdateTransaction(ctx context.Context, req *v1.GfUpdate
 		return nil, err
 	}
 
-	return &v1.UpdateTransactionRes{
+	return &v1.GfUpdateTransactionRes{
 		Transaction: entityToProto(tx),
 		Base:        &base.BaseResponse{Message: "success"},
 	}, nil
