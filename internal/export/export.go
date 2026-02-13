@@ -36,10 +36,12 @@ type AccountExport struct {
 	Id             string  `json:"id"`
 	ParentId       string  `json:"parentId,omitempty"`
 	Name           string  `json:"name"`
-	Type           string  `json:"type"`
+	Type           int     `json:"type"`
 	IsGroup        bool    `json:"isGroup"`
-	Balance        float64 `json:"balance"`
-	Currency       string  `json:"currency"`
+	CurrencyCode   string  `json:"currencyCode"`
+	BalanceUnits   int64   `json:"balanceUnits"`
+	BalanceNanos   int     `json:"balanceNanos"`
+	BalanceDecimal float64 `json:"balanceDecimal"`
 	DefaultChildId string  `json:"defaultChildId,omitempty"`
 	Date           string  `json:"date,omitempty"`
 	Number         string  `json:"number,omitempty"`
@@ -50,16 +52,18 @@ type AccountExport struct {
 
 // TransactionExport represents an exported transaction
 type TransactionExport struct {
-	Id            string  `json:"id"`
-	Date          string  `json:"date"`
-	FromAccountId string  `json:"fromAccountId"`
-	ToAccountId   string  `json:"toAccountId"`
-	Amount        float64 `json:"amount"`
-	Currency      string  `json:"currency"`
-	Note          string  `json:"note,omitempty"`
-	Type          string  `json:"type"`
-	CreatedAt     string  `json:"createdAt"`
-	UpdatedAt     string  `json:"updatedAt"`
+	Id             string  `json:"id"`
+	Date           string  `json:"date"`
+	FromAccountId  string  `json:"fromAccountId"`
+	ToAccountId    string  `json:"toAccountId"`
+	CurrencyCode   string  `json:"currencyCode"`
+	BalanceUnits   int64   `json:"balanceUnits"`
+	BalanceNanos   int     `json:"balanceNanos"`
+	BalanceDecimal float64 `json:"balanceDecimal"`
+	Note           string  `json:"note,omitempty"`
+	Type           int     `json:"type"`
+	CreatedAt      string  `json:"createdAt"`
+	UpdatedAt      string  `json:"updatedAt"`
 }
 
 // ExportData is the complete export structure
@@ -202,14 +206,16 @@ func convertAccounts(accounts []entity.Accounts) []AccountExport {
 	result := make([]AccountExport, 0, len(accounts))
 	for _, a := range accounts {
 		exp := AccountExport{
-			Id:             a.Id,
-			ParentId:       a.ParentId,
+			Id:             a.Id.String(),
+			ParentId:       a.ParentId.String(),
 			Name:           a.Name,
 			Type:           a.Type,
 			IsGroup:        a.IsGroup,
-			Balance:        a.Balance,
-			Currency:       a.Currency,
-			DefaultChildId: a.DefaultChildId,
+			CurrencyCode:   a.CurrencyCode,
+			BalanceUnits:   a.BalanceUnits,
+			BalanceNanos:   a.BalanceNanos,
+			BalanceDecimal: a.BalanceDecimal,
+			DefaultChildId: a.DefaultChildId.String(),
 			Number:         a.Number,
 			Remarks:        a.Remarks,
 		}
@@ -232,13 +238,15 @@ func convertTransactions(transactions []entity.Transactions) []TransactionExport
 	result := make([]TransactionExport, 0, len(transactions))
 	for _, t := range transactions {
 		exp := TransactionExport{
-			Id:            t.Id,
-			FromAccountId: t.FromAccountId,
-			ToAccountId:   t.ToAccountId,
-			Amount:        t.Amount,
-			Currency:      t.Currency,
-			Note:          t.Note,
-			Type:          t.Type,
+			Id:             t.Id.String(),
+			FromAccountId:  t.FromAccountId.String(),
+			ToAccountId:    t.ToAccountId.String(),
+			CurrencyCode:   t.CurrencyCode,
+			BalanceUnits:   t.BalanceUnits,
+			BalanceNanos:   t.BalanceNanos,
+			BalanceDecimal: t.BalanceDecimal,
+			Note:           t.Note,
+			Type:           t.Type,
 		}
 		if t.Date != nil {
 			exp.Date = t.Date.Format("Y-m-d")

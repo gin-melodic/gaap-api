@@ -14,7 +14,7 @@ import (
 
 // Message represents a message to be published or consumed
 type Message struct {
-	Type    string          `json:"type"`
+	Type    int             `json:"type"`
 	Payload json.RawMessage `json:"payload"`
 }
 
@@ -42,7 +42,8 @@ var (
 
 // Queue names
 const (
-	QueueTasks = "gaap.tasks"
+	QueueTasks     = "gaap.tasks"
+	QueueDashboard = "gaap.dashboard"
 )
 
 // GetRabbitMQ returns singleton RabbitMQ client
@@ -129,16 +130,18 @@ func (r *RabbitMQ) tryConnect(ctx context.Context) error {
 	}
 
 	// Declare queues
-	_, err = r.channel.QueueDeclare(
-		QueueTasks, // name
-		true,       // durable
-		false,      // delete when unused
-		false,      // exclusive
-		false,      // no-wait
-		nil,        // arguments
-	)
-	if err != nil {
-		return fmt.Errorf("failed to declare queue: %w", err)
+	for _, queueName := range []string{QueueTasks, QueueDashboard} {
+		_, err = r.channel.QueueDeclare(
+			queueName, // name
+			true,      // durable
+			false,     // delete when unused
+			false,     // exclusive
+			false,     // no-wait
+			nil,       // arguments
+		)
+		if err != nil {
+			return fmt.Errorf("failed to declare queue %s: %w", queueName, err)
+		}
 	}
 
 	return nil
@@ -189,7 +192,7 @@ func (r *RabbitMQ) Publish(ctx context.Context, queue string, msg *Message) erro
 		return fmt.Errorf("failed to publish message: %w", err)
 	}
 
-	g.Log().Debugf(ctx, "Published message to queue %s: %s", queue, msg.Type)
+	g.Log().Debugf(ctx, "Published message to queue %s: %d", queue, msg.Type)
 	return nil
 }
 

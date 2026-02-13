@@ -1,0 +1,99 @@
+syntax = "proto3";
+
+package task.v1;
+
+option go_package = "gaap-api/api/task/v1;v1";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+import "base/base.proto";
+
+service TaskService {
+  // List all tasks
+  rpc ListTasks(ListTasksReq) returns (ListTasksRes);
+  
+  // Get task details
+  rpc GetTask(GetTaskReq) returns (GetTaskRes);
+  
+  // Cancel a task
+  rpc CancelTask(CancelTaskReq) returns (CancelTaskRes);
+  
+  // Retry a task
+  rpc RetryTask(RetryTaskReq) returns (RetryTaskRes);
+}
+
+
+enum TaskType {
+  TASK_TYPE_UNSPECIFIED = 0; // Default
+  TASK_TYPE_ACCOUNT_MIGRATION = 1;
+  TASK_TYPE_EXPORT_DATA = 2;
+  TASK_TYPE_IMPORT_DATA = 3;
+}
+
+enum TaskStatus {
+  TASK_STATUS_UNSPECIFIED = 0; // Default
+  TASK_STATUS_PENDING = 1;
+  TASK_STATUS_RUNNING = 2;
+  TASK_STATUS_COMPLETED = 3;
+  TASK_STATUS_FAILED = 4;
+  TASK_STATUS_CANCELLED = 5;
+}
+
+message Task {
+  string id = 1;
+  TaskType type = 2;
+  TaskStatus status = 3;
+  google.protobuf.Struct payload = 4;
+  google.protobuf.Struct result = 5;
+  int32 progress = 6;
+  int32 total_items = 7;
+  int32 processed_items = 8;
+  
+  google.protobuf.Timestamp started_at = 9;
+  google.protobuf.Timestamp completed_at = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+}
+
+message TaskQuery {
+  int32 page = 1;
+  int32 limit = 2;
+  TaskStatus status = 3;
+  TaskType type = 4;
+}
+
+message ListTasksReq {
+  TaskQuery query = 1;
+}
+
+message ListTasksRes {
+  repeated Task data = 1;
+  base.PaginatedResponse pagination = 2;
+  base.BaseResponse base = 255;
+}
+
+message GetTaskReq {
+  string id = 1;
+}
+
+message GetTaskRes {
+  Task task = 1;
+  base.BaseResponse base = 255;
+}
+
+message CancelTaskReq {
+  string id = 1;
+}
+
+message CancelTaskRes {
+  base.BaseResponse base = 255;
+}
+
+message RetryTaskReq {
+  string id = 1;
+}
+
+message RetryTaskRes {
+  Task task = 1;
+  base.BaseResponse base = 255;
+}

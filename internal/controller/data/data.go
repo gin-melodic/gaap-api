@@ -3,3 +3,10 @@
 // =================================================================================
 
 package data
+
+import (
+	v1 "gaap-api/api/data/v1"
+)
+
+// taskToProto is a placeholder for task conversion (will be handled by task controller)
+var _ = v1.ExportDataRes{}

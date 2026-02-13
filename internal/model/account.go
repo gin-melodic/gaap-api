@@ -1,45 +1,31 @@
 package model
 
-import "github.com/gogf/gf/v2/os/gtime"
-
-type Account struct {
-	Id             string
-	ParentId       string
-	Name           string
-	Type           string
-	IsGroup        bool
-	Balance        float64
-	Currency       string
-	DefaultChildId string
-	Date           string
-	Number         string
-	Remarks        string
-	CreatedAt      *gtime.Time
-	UpdatedAt      *gtime.Time
-}
+import "github.com/google/uuid"
 
 type AccountCreateInput struct {
-	UserId         string
-	ParentId       string
+	UserId         uuid.UUID
+	ParentId       uuid.UUID
 	Name           string
-	Type           string
+	Type           int
 	IsGroup        bool
-	Balance        float64
-	Currency       string
-	DefaultChildId string
+	CurrencyCode   string
+	Units          int64
+	Nanos          int
+	DefaultChildId uuid.UUID
 	Date           string
 	Number         string
 	Remarks        string
 }
 
 type AccountUpdateInput struct {
-	ParentId       string
+	ParentId       uuid.UUID
 	Name           string
-	Type           string
+	Type           int
 	IsGroup        bool
-	Balance        float64
-	Currency       string
-	DefaultChildId string
+	CurrencyCode   string
+	BalanceUnits   *int64
+	BalanceNanos   *int
+	DefaultChildId uuid.UUID
 	Date           string
 	Number         string
 	Remarks        string
@@ -48,6 +34,6 @@ type AccountUpdateInput struct {
 type AccountQueryInput struct {
 	Page     int
 	Limit    int
-	Type     string
-	ParentId string
+	Type     int
+	ParentId uuid.UUID
 }

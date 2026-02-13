@@ -12,7 +12,7 @@ import (
 // Currencies is the golang structure of table currencies for DAO operations like Where/Data.
 type Currencies struct {
 	g.Meta    `orm:"table:currencies, do:true"`
-	Code      interface{} //
+	Code      any         //
 	CreatedAt *gtime.Time //
 	UpdatedAt *gtime.Time //
 	DeletedAt *gtime.Time //

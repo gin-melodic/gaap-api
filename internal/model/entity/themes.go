@@ -6,11 +6,12 @@ package entity
 
 import (
 	"github.com/gogf/gf/v2/os/gtime"
+	"github.com/google/uuid"
 )
 
 // Themes is the golang structure for table themes.
 type Themes struct {
-	Id        string      `json:"id"        orm:"id"         description:""` //
+	Id        uuid.UUID   `json:"id"        orm:"id"         description:""` //
 	Name      string      `json:"name"      orm:"name"       description:""` //
 	IsDark    bool        `json:"isDark"    orm:"is_dark"    description:""` //
 	Colors    string      `json:"colors"    orm:"colors"     description:""` //

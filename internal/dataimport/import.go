@@ -88,7 +88,7 @@ func executeImport(ctx context.Context, tx gdb.TX, userId string, data *export.E
 			Where("user_id", userId).
 			Where("name", acc.Name).
 			Where("type", acc.Type).
-			Where("currency", acc.Currency).
+			Where("currency_code", acc.CurrencyCode).
 			WhereNull("deleted_at").
 			Fields("id").
 			Value()
@@ -120,7 +120,7 @@ func executeImport(ctx context.Context, tx gdb.TX, userId string, data *export.E
 			"type":             acc.Type,
 			"is_group":         boolToInt(acc.IsGroup),
 			"balance":          0, // Start with zero balance, will be recalculated
-			"currency":         acc.Currency,
+			"currency_code":    acc.CurrencyCode,
 			"default_child_id": "", // Will remap later if needed
 			"date":             acc.Date,
 			"number":           acc.Number,
@@ -160,8 +160,9 @@ func executeImport(ctx context.Context, tx gdb.TX, userId string, data *export.E
 			Where("date", txn.Date).
 			Where("from_account_id", fromAccountId).
 			Where("to_account_id", toAccountId).
-			Where("amount", txn.Amount).
-			Where("currency", txn.Currency).
+			Where("balance_units", txn.BalanceUnits).
+			Where("balance_nanos", txn.BalanceNanos).
+			Where("currency_code", txn.CurrencyCode).
 			WhereNull("deleted_at").
 			Fields("id").
 			Value()
@@ -181,8 +182,9 @@ func executeImport(ctx context.Context, tx gdb.TX, userId string, data *export.E
 			"date":            txn.Date,
 			"from_account_id": fromAccountId,
 			"to_account_id":   toAccountId,
-			"amount":          txn.Amount,
-			"currency":        txn.Currency,
+			"balance_units":   txn.BalanceUnits,
+			"balance_nanos":   txn.BalanceNanos,
+			"currency_code":   txn.CurrencyCode,
 			"note":            txn.Note,
 			"type":            txn.Type,
 			"created_at":      gtime.Now(),

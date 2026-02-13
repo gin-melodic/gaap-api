@@ -1,14 +1,19 @@
 package crypto
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
 	"errors"
 	"io"
 	"os"
 
+	"github.com/gogf/gf/v2/frame/g"
 	"golang.org/x/crypto/hkdf"
 )
 
@@ -17,12 +22,120 @@ const (
 	KeySize = 32
 	// NonceSize is the size of GCM nonce in bytes
 	NonceSize = 12
+	// HMACSize is the size of HMAC-SHA256 output in bytes
+	HMACSize = 32
 )
 
 var (
 	ErrInvalidCiphertext = errors.New("invalid ciphertext: too short")
 	ErrDecryptionFailed  = errors.New("decryption failed: authentication error")
+	ErrInvalidSignature  = errors.New("invalid signature")
+	ErrInvalidKeySize    = errors.New("invalid key size: must be 32 bytes")
+	ErrInvalidHexKey     = errors.New("invalid hex key format")
 )
+
+// ---------------------------------------------------------
+// Hex Encoding Helpers
+// ---------------------------------------------------------
+
+// HexToBytes converts a hex string to bytes
+func HexToBytes(hexStr string) ([]byte, error) {
+	bytes, err := hex.DecodeString(hexStr)
+	if err != nil {
+		return nil, ErrInvalidHexKey
+	}
+	return bytes, nil
+}
+
+// BytesToHex converts bytes to hex string
+func BytesToHex(bytes []byte) string {
+	return hex.EncodeToString(bytes)
+}
+
+// ---------------------------------------------------------
+// Session Key Generation
+// ---------------------------------------------------------
+
+// GenerateSessionKey generates a random 256-bit session key and returns it as hex string
+func GenerateSessionKey() (string, error) {
+	key := make([]byte, KeySize)
+	if _, err := io.ReadFull(rand.Reader, key); err != nil {
+		return "", err
+	}
+	return BytesToHex(key), nil
+}
+
+// ---------------------------------------------------------
+// HMAC-SHA256 Signing and Verification
+// ---------------------------------------------------------
+
+// SignHMAC signs data using HMAC-SHA256 with the provided key
+// Returns signature as hex string
+func SignHMAC(data, key []byte) string {
+	h := hmac.New(sha256.New, key)
+	h.Write(data)
+	return BytesToHex(h.Sum(nil))
+}
+
+// VerifyHMAC verifies HMAC-SHA256 signature
+// signatureHex is the expected signature in hex format
+func VerifyHMAC(data, key []byte, signatureHex string) bool {
+	expectedSig, err := HexToBytes(signatureHex)
+	if err != nil || len(expectedSig) != HMACSize {
+		return false
+	}
+
+	h := hmac.New(sha256.New, key)
+	h.Write(data)
+	actualSig := h.Sum(nil)
+
+	// Use constant-time comparison to prevent timing attacks
+	return subtle.ConstantTimeCompare(actualSig, expectedSig) == 1
+}
+
+// BuildSignaturePayload builds the payload for HMAC signing
+// Order must match frontend: IV + Ciphertext + Timestamp + Nonce
+func BuildSignaturePayload(iv, ciphertext []byte, timestamp, nonce string) []byte {
+	timestampBytes := []byte(timestamp)
+	nonceBytes := []byte(nonce)
+
+	payload := make([]byte, len(iv)+len(ciphertext)+len(timestampBytes)+len(nonceBytes))
+	offset := 0
+
+	copy(payload[offset:], iv)
+	offset += len(iv)
+	copy(payload[offset:], ciphertext)
+	offset += len(ciphertext)
+	copy(payload[offset:], timestampBytes)
+	offset += len(timestampBytes)
+	copy(payload[offset:], nonceBytes)
+
+	return payload
+}
+
+// ---------------------------------------------------------
+// AES-GCM with Hex Key Support
+// ---------------------------------------------------------
+
+// EncryptWithHexKey encrypts plaintext using AES-GCM with hex-encoded key
+// Returns: IV (12 bytes) concatenated with ciphertext
+func EncryptWithHexKey(plaintext []byte, hexKey string) ([]byte, error) {
+	key, err := HexToBytes(hexKey)
+	if err != nil {
+		return nil, err
+	}
+	return Encrypt(plaintext, key)
+}
+
+// DecryptWithHexKey decrypts ciphertext using AES-GCM with hex-encoded key
+// Expects: IV (12 bytes) concatenated with ciphertext
+func DecryptWithHexKey(ciphertext []byte, hexKey string) ([]byte, error) {
+	key, err := HexToBytes(hexKey)
+	if err != nil {
+		return nil, err
+	}
+	return Decrypt(ciphertext, key)
+}
 
 // DeriveKey derives a unique encryption key from userId and server secret using HKDF-SHA256.
 // This ensures each user has a unique key, preventing cross-user data import.
@@ -50,8 +163,7 @@ func GetServerSecret() string {
 		secret = os.Getenv("JWT_SECRET")
 	}
 	if secret == "" {
-		// Default for development only - should never be used in production
-		secret = "gaap-dev-secret-change-in-production"
+		g.Log().Fatal(context.Background(), "JWT_SECRET environment variable not set and no fallback available")
 	}
 	return secret
 }

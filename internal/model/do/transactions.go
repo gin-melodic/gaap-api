@@ -11,17 +11,19 @@ import (
 
 // Transactions is the golang structure of table transactions for DAO operations like Where/Data.
 type Transactions struct {
-	g.Meta        `orm:"table:transactions, do:true"`
-	Id            interface{} //
-	UserId        interface{} //
-	Date          *gtime.Time //
-	FromAccountId interface{} //
-	ToAccountId   interface{} //
-	Amount        interface{} //
-	Currency      interface{} //
-	Note          interface{} //
-	Type          interface{} //
-	CreatedAt     *gtime.Time //
-	UpdatedAt     *gtime.Time //
-	DeletedAt     *gtime.Time //
+	g.Meta         `orm:"table:transactions, do:true"`
+	Id             any         //
+	UserId         any         //
+	Date           *gtime.Time //
+	FromAccountId  any         //
+	ToAccountId    any         //
+	CurrencyCode   any         //
+	BalanceUnits   any         //
+	BalanceNanos   any         //
+	BalanceDecimal any         //
+	Note           any         //
+	Type           any         //
+	CreatedAt      *gtime.Time //
+	UpdatedAt      *gtime.Time //
+	DeletedAt      *gtime.Time //
 }

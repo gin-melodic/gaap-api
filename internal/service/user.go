@@ -1,3 +1,8 @@
+// ================================================================================
+// Code generated and maintained by GoFrame CLI tool. DO NOT EDIT.
+// You can delete these comments if you wish manually maintain this interface file.
+// ================================================================================
+
 package service
 
 import (
@@ -5,13 +10,17 @@ import (
 	"gaap-api/internal/model"
 )
 
-type IUser interface {
-	GetUserProfile(ctx context.Context) (out *model.UserProfile, err error)
-	UpdateUserProfile(ctx context.Context, in model.UserUpdateInput) (out *model.UserProfile, err error)
-	UpdateThemePreference(ctx context.Context, in model.Theme) (out *model.Theme, err error)
-}
+type (
+	IUser interface {
+		GetUserProfile(ctx context.Context) (out *model.UserProfile, err error)
+		UpdateUserProfile(ctx context.Context, in model.UserUpdateInput) (out *model.UserProfile, err error)
+		UpdateThemePreference(ctx context.Context, in model.Theme) (out *model.Theme, err error)
+	}
+)
 
-var localUser IUser
+var (
+	localUser IUser
+)
 
 func User() IUser {
 	if localUser == nil {

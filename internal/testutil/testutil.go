@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"gaap-api/internal/mq"
+	"sync"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -14,6 +15,10 @@ import (
 
 var (
 	mockDB *sql.DB
+	// Globals to track what gdb has already cached to avoid adding redundant expectations
+	gdbInitialized bool
+	gdbTables      = make(map[string]bool)
+	gdbMu          sync.Mutex
 )
 
 type DriverMock struct {
@@ -52,6 +57,13 @@ func init() {
 }
 
 func InitMockDB(t *testing.T) (sqlmock.Sqlmock, gdb.DB) {
+	// Close the previous mockDB if it exists.
+	// This ensures that any cached connection pools in gdb will encounter a closed connection,
+	// forcing a reconnection which will pick up the new mockDB from the driver.
+	if mockDB != nil {
+		mockDB.Close()
+	}
+
 	var err error
 	var mock sqlmock.Sqlmock
 	mockDB, mock, err = sqlmock.New(sqlmock.MonitorPingsOption(true))
@@ -60,13 +72,12 @@ func InitMockDB(t *testing.T) (sqlmock.Sqlmock, gdb.DB) {
 	}
 
 	// Set mock configuration globally
-	// We do this in InitMockDB to ensure it's set even if other things reset it
-	// We use t.Name() in Extra to force gdb to create a new instance for each test
-	// because gdb caches instances based on ConfigNode value.
+	// We use t.Name() in Extra to force gdb to update the config hash
 	gdb.SetConfig(gdb.Config{
 		"default": gdb.ConfigGroup{
 			gdb.ConfigNode{
 				Type:  "mock",
+				Name:  t.Name(), // Force unique database name to invalidate schema cache
 				Role:  "master",
 				Debug: true,
 				Extra: t.Name(),
@@ -86,16 +97,32 @@ func InitMockDB(t *testing.T) (sqlmock.Sqlmock, gdb.DB) {
 }
 
 func MockDBInit(mock sqlmock.Sqlmock) {
-	// Mock the PostgreSQL version query that GoFrame executes
-	mock.ExpectQuery("SELECT version()").
-		WillReturnRows(sqlmock.NewRows([]string{"version"}).AddRow("PostgreSQL mock"))
+	gdbMu.Lock()
+	defer gdbMu.Unlock()
 
-	// Mock the table names query that GoFrame executes
-	mock.ExpectQuery("SELECT c.relname FROM pg_class c INNER JOIN pg_namespace n ON c.relnamespace = n.oid WHERE n.nspname = 'public' AND c.relkind IN \\('r', 'p'\\) ORDER BY c.relname").
-		WillReturnRows(sqlmock.NewRows([]string{"relname"}))
+	// Mock the PostgreSQL version query that GoFrame executes
+	// Only add if not already initialized (gdb caches this)
+	if !gdbInitialized {
+		mock.ExpectQuery("SELECT version()").
+			WillReturnRows(sqlmock.NewRows([]string{"version"}).AddRow("PostgreSQL mock"))
+
+		// Mock the table names query that GoFrame executes
+		mock.ExpectQuery("SELECT c.relname FROM pg_class c INNER JOIN pg_namespace n ON c.relnamespace = n.oid WHERE n.nspname = 'public' AND c.relkind IN \\('r', 'p'\\) ORDER BY c.relname").
+			WillReturnRows(sqlmock.NewRows([]string{"relname"}))
+
+		gdbInitialized = true
+	}
 }
 
 func MockMeta(mock sqlmock.Sqlmock, tableName string, columns []string) {
+	gdbMu.Lock()
+	defer gdbMu.Unlock()
+
+	// Only add schema expectation if we haven't seen this table before
+	if gdbTables[tableName] {
+		return
+	}
+
 	rows := sqlmock.NewRows([]string{"field", "type", "null", "key", "default_value", "comment", "length", "scale"})
 	for _, col := range columns {
 		key := ""
@@ -108,6 +135,8 @@ func MockMeta(mock sqlmock.Sqlmock, tableName string, columns []string) {
 	// It queries pg_attribute, pg_class, etc. and filters by relname.
 	pattern := fmt.Sprintf("SELECT a.attname AS field(.*)WHERE c.relname = '%s'(.*)", tableName)
 	mock.ExpectQuery(pattern).WillReturnRows(rows)
+
+	gdbTables[tableName] = true
 }
 
 func MockVersion(mock sqlmock.Sqlmock) {

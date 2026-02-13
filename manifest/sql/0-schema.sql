@@ -1,9 +1,5 @@
 -- GAAP Web Database Schema
--- Generated based on openapi.yaml
 -- Updated to support GORM soft delete (deleted_at)
-
--- Enable UUID extension if needed (though we are using string IDs based on spec)
--- CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Drop tables to ensure clean state in dev
 SET client_min_messages = warning;
@@ -49,7 +45,7 @@ CREATE TABLE IF NOT EXISTS themes (
 
 -- Currencies Table
 CREATE TABLE IF NOT EXISTS currencies (
-    code CHAR(3) PRIMARY KEY CHECK (code ~ '^[A-Z]{3}$'),
+    code VARCHAR(10) PRIMARY KEY,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP WITH TIME ZONE
@@ -62,11 +58,11 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) NOT NULL UNIQUE,
     nickname VARCHAR(50) NOT NULL,
     avatar VARCHAR(2048),
-    plan VARCHAR(10) NOT NULL CHECK (plan IN ('FREE', 'PRO')),
+    plan INTEGER NOT NULL,
     theme_id UUID REFERENCES themes(id) ON DELETE SET NULL,
-    main_currency CHAR(3) REFERENCES currencies(code) ON DELETE SET NULL,
+    main_currency VARCHAR(10) REFERENCES currencies(code) ON DELETE SET NULL,
     two_factor_secret VARCHAR(100),
-    two_factor_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    two_factor_enabled BOOLEAN NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP WITH TIME ZONE
@@ -76,19 +72,19 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS oauth_connections (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    provider VARCHAR(20) NOT NULL,
+    "provider" VARCHAR(20) NOT NULL,
     provider_user_id VARCHAR(255) NOT NULL,
     access_token VARCHAR(1024),
     refresh_token VARCHAR(1024),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(provider, provider_user_id)
+    UNIQUE("provider", provider_user_id)
 );
 
 -- Account Types Table
 -- Stores configuration for account types (ASSET, LIABILITY, etc.)
 CREATE TABLE IF NOT EXISTS account_types (
-    type VARCHAR(20) PRIMARY KEY CHECK (type IN ('ASSET', 'LIABILITY', 'INCOME', 'EXPENSE')),
+    "type" INTEGER PRIMARY KEY,
     label VARCHAR(50) NOT NULL,
     color VARCHAR(50),
     bg VARCHAR(50),
@@ -104,10 +100,12 @@ CREATE TABLE IF NOT EXISTS accounts (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     parent_id UUID REFERENCES accounts(id) ON DELETE SET NULL,
     name VARCHAR(100) NOT NULL,
-    type VARCHAR(20) NOT NULL REFERENCES account_types(type),
+    type INTEGER NOT NULL REFERENCES account_types(type),
     is_group BOOLEAN NOT NULL DEFAULT FALSE,
-    balance DECIMAL(20, 2) NOT NULL DEFAULT 0,
-    currency CHAR(3) NOT NULL REFERENCES currencies(code),
+    currency_code VARCHAR(10) NOT NULL,
+    balance_units BIGINT NOT NULL DEFAULT 0,
+    balance_nanos INTEGER NOT NULL DEFAULT 0,
+    balance_decimal NUMERIC(20, 9) GENERATED ALWAYS AS ( balance_units + (balance_nanos::NUMERIC / 1000000000) ) STORED,
     default_child_id UUID REFERENCES accounts(id) ON DELETE SET NULL,
     date DATE,
     number VARCHAR(50),
@@ -124,10 +122,12 @@ CREATE TABLE IF NOT EXISTS transactions (
     date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
     from_account_id UUID NOT NULL REFERENCES accounts(id),
     to_account_id UUID NOT NULL REFERENCES accounts(id),
-    amount DECIMAL(20, 2) NOT NULL CHECK (amount >= 0),
-    currency CHAR(3) NOT NULL REFERENCES currencies(code),
+    currency_code VARCHAR(10) NOT NULL,
+    balance_units BIGINT NOT NULL DEFAULT 0,
+    balance_nanos INTEGER NOT NULL DEFAULT 0,
+    balance_decimal NUMERIC(20, 9) GENERATED ALWAYS AS ( balance_units + (balance_nanos::NUMERIC / 1000000000) ) STORED,
     note VARCHAR(500),
-    type VARCHAR(20) NOT NULL CHECK (type IN ('INCOME', 'EXPENSE', 'TRANSFER')),
+    type INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP WITH TIME ZONE
@@ -137,13 +137,12 @@ CREATE TABLE IF NOT EXISTS transactions (
 CREATE TABLE IF NOT EXISTS tasks (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    type VARCHAR(50) NOT NULL,                                      -- 'ACCOUNT_MIGRATION', etc.
-    status VARCHAR(20) NOT NULL DEFAULT 'PENDING'                   -- PENDING, RUNNING, COMPLETED, FAILED, CANCELLED
-        CHECK (status IN ('PENDING', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED')),
-    payload JSONB NOT NULL,                                         -- Task-specific data
-    result JSONB,                                                   -- Completion result or error
+    type INTEGER NOT NULL DEFAULT 0,
+    status INTEGER NOT NULL DEFAULT 1,
+    payload JSONB NOT NULL,
+    result JSONB,
     progress INT DEFAULT 0 CHECK (progress >= 0 AND progress <= 100),
-    total_items INT,                                                -- Total items to process
+    total_items INT,
     processed_items INT DEFAULT 0,                                  -- Items processed so far
     started_at TIMESTAMP WITH TIME ZONE,
     completed_at TIMESTAMP WITH TIME ZONE,

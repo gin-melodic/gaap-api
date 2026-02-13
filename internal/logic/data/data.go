@@ -3,21 +3,20 @@ package data
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"time"
 
-	common "gaap-api/api/common/v1"
-	v1 "gaap-api/api/data/v1"
 	"gaap-api/internal/dataimport"
 	"gaap-api/internal/export"
-	"gaap-api/internal/middleware"
+	"gaap-api/internal/logic/utils"
 	"gaap-api/internal/model"
 	"gaap-api/internal/service"
 
+	"github.com/gogf/gf/v2/errors/gerror"
 	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/net/ghttp"
+	"github.com/google/uuid"
 )
 
 // sData is the service implementation for data export/import
@@ -25,117 +24,110 @@ type sData struct{}
 
 var dataInstance = &sData{}
 
-// Data returns the data service instance
-func Data() *sData {
+func init() {
+	service.RegisterData(New())
+}
+
+// New returns the data service instance
+func New() *sData {
 	return dataInstance
 }
 
 // Export creates an export task
-func (s *sData) Export(ctx context.Context, req *v1.ExportDataReq) (*v1.ExportDataRes, error) {
-	userId, _ := ctx.Value(middleware.UserIdKey).(string)
-	if userId == "" {
-		return nil, fmt.Errorf("user not authenticated")
+func (s *sData) Export(ctx context.Context, in model.DataExportInput) (*model.DataExportOutput, error) {
+	userIdStr := utils.RequireUserId(ctx)
+	userId, err := uuid.Parse(userIdStr)
+	if err != nil {
+		return nil, gerror.Wrap(err, "invalid user ID")
 	}
 
 	// Validate date range
-	startDate, err := time.Parse("2006-01-02", req.StartDate)
+	startDate, err := time.Parse("2006-01-02", in.StartDate)
 	if err != nil {
-		return nil, fmt.Errorf("invalid start date format")
+		return nil, gerror.New("invalid start date format")
 	}
 
-	endDate, err := time.Parse("2006-01-02", req.EndDate)
+	endDate, err := time.Parse("2006-01-02", in.EndDate)
 	if err != nil {
-		return nil, fmt.Errorf("invalid end date format")
+		return nil, gerror.New("invalid end date format")
 	}
 
 	if endDate.Before(startDate) {
-		return nil, fmt.Errorf("end date must be after start date")
+		return nil, gerror.New("end date must be after start date")
 	}
 
 	// Check max 3 years
 	maxEnd := startDate.AddDate(3, 0, 0)
 	if endDate.After(maxEnd) {
-		return nil, fmt.Errorf("date range cannot exceed 3 years")
+		return nil, gerror.New("date range cannot exceed 3 years")
 	}
 
 	// Create export task
-	task, err := service.Task().CreateTask(ctx, model.TaskCreateInput{
+	task, err := service.Task().CreateTask(ctx, model.TaskCreateInput[any]{
 		UserId: userId,
 		Type:   model.TaskTypeDataExport,
 		Payload: model.DataExportPayload{
-			UserId:    userId,
-			StartDate: req.StartDate,
-			EndDate:   req.EndDate,
+			Payload:   &model.Payload{UserId: userId},
+			StartDate: in.StartDate,
+			EndDate:   in.EndDate,
 		},
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return &v1.ExportDataRes{
-		TaskId: task.Id,
+	return &model.DataExportOutput{
+		TaskId: task.Id.String(),
 	}, nil
 }
 
 // Import creates an import task
-func (s *sData) Import(ctx context.Context, req *v1.ImportDataReq) (*v1.ImportDataRes, error) {
-	userId, _ := ctx.Value(middleware.UserIdKey).(string)
-	if userId == "" {
-		return nil, fmt.Errorf("user not authenticated")
+func (s *sData) Import(ctx context.Context, in model.DataImportInput) (*model.DataImportOutput, error) {
+	userIdStr := utils.RequireUserId(ctx)
+	userId, err := uuid.Parse(userIdStr)
+	if err != nil {
+		return nil, gerror.Wrap(err, "invalid user ID")
 	}
 
 	// Check if user already has an active import task
-	hasActive, err := dataimport.HasActiveImportTask(ctx, userId)
+	hasActive, err := dataimport.HasActiveImportTask(ctx, userIdStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check import status: %w", err)
+		return nil, gerror.Wrap(err, "failed to check import status")
 	}
 	if hasActive {
-		return nil, fmt.Errorf("an import task is already in progress")
+		return nil, gerror.New("an import task is already in progress")
 	}
 
 	// Save uploaded file
-	file := req.File
-	if file == nil {
-		return nil, fmt.Errorf("no file uploaded")
+	if len(in.FileContent) == 0 {
+		return nil, gerror.New("no file uploaded")
 	}
 
 	// Validate file extension
-	if filepath.Ext(file.Filename) != ".zip" {
-		return nil, fmt.Errorf("only .zip files are supported")
+	if filepath.Ext(in.FileName) != ".zip" {
+		return nil, gerror.New("only .zip files are supported")
 	}
 
 	// Generate unique filename
 	timestamp := time.Now().Format("20060102_150405")
-	fileName := fmt.Sprintf("import_%s_%s_%s", userId[:8], timestamp, file.Filename)
+	fileName := fmt.Sprintf("import_%s_%s_%s", userIdStr[:8], timestamp, in.FileName)
 
 	// Save to import directory
 	if err := os.MkdirAll(dataimport.ImportDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create import directory: %w", err)
+		return nil, gerror.Wrap(err, "failed to create import directory")
 	}
 
 	filePath := filepath.Join(dataimport.ImportDir, fileName)
-	savedFile, err := file.Open()
-	if err != nil {
-		return nil, fmt.Errorf("failed to open uploaded file: %w", err)
-	}
-	defer savedFile.Close()
-
-	destFile, err := os.Create(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create destination file: %w", err)
-	}
-	defer destFile.Close()
-
-	if _, err := io.Copy(destFile, savedFile); err != nil {
-		return nil, fmt.Errorf("failed to save file: %w", err)
+	if err := os.WriteFile(filePath, in.FileContent, 0644); err != nil {
+		return nil, gerror.Wrap(err, "failed to save file")
 	}
 
 	// Create import task
-	task, err := service.Task().CreateTask(ctx, model.TaskCreateInput{
+	task, err := service.Task().CreateTask(ctx, model.TaskCreateInput[any]{
 		UserId: userId,
 		Type:   model.TaskTypeDataImport,
 		Payload: model.DataImportPayload{
-			UserId:   userId,
+			Payload:  &model.Payload{UserId: userId},
 			FileName: filePath,
 		},
 	})
@@ -145,50 +137,51 @@ func (s *sData) Import(ctx context.Context, req *v1.ImportDataReq) (*v1.ImportDa
 		return nil, err
 	}
 
-	return &v1.ImportDataRes{
-		TaskId: task.Id,
+	return &model.DataImportOutput{
+		TaskId: task.Id.String(),
 	}, nil
 }
 
 // Download serves the export file for download
-func (s *sData) Download(ctx context.Context, req *v1.DownloadExportReq, r *ghttp.Request) error {
-	userId, _ := ctx.Value(middleware.UserIdKey).(string)
-	if userId == "" {
-		return fmt.Errorf("user not authenticated")
+func (s *sData) Download(ctx context.Context, in model.DataDownloadInput, r *ghttp.Request) error {
+	userIdStr := utils.RequireUserId(ctx)
+	userId, err := uuid.Parse(userIdStr)
+	if err != nil {
+		return gerror.Wrap(err, "invalid user ID")
 	}
 
 	// Get task
-	task, err := service.Task().GetTask(ctx, req.TaskId)
+	task, err := service.Task().GetTask(ctx, in.TaskId)
 	if err != nil {
 		return err
 	}
 
 	// Verify ownership
 	if task.UserId != userId {
-		return fmt.Errorf("task not found")
+		return gerror.New("task not found")
 	}
 
 	// Check task status
 	if task.Status != model.TaskStatusCompleted {
-		return fmt.Errorf("export not ready")
+		return gerror.New("export not ready")
 	}
 
 	// Get result
 	result, ok := task.Result.(map[string]interface{})
 	if !ok {
-		return fmt.Errorf("invalid task result")
+		return gerror.New("invalid task result")
 	}
 
 	filePath, _ := result["filePath"].(string)
 	fileName, _ := result["fileName"].(string)
 
 	if filePath == "" || fileName == "" {
-		return fmt.Errorf("export file not found")
+		return gerror.New("export file not found")
 	}
 
 	// Check file exists
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return fmt.Errorf("export file has expired")
+		return gerror.New("export file has expired")
 	}
 
 	// Serve file
@@ -196,63 +189,35 @@ func (s *sData) Download(ctx context.Context, req *v1.DownloadExportReq, r *ghtt
 	r.Response.Header().Set("Content-Type", "application/zip")
 	r.Response.ServeFile(filePath)
 
-	// Clean up after download (optional - could also use scheduled cleanup)
+	// Clean up after download
 	go export.CleanupExport(filePath)
 
 	return nil
 }
 
 // GetExportStatus returns the status of an export task
-func (s *sData) GetExportStatus(ctx context.Context, req *v1.GetExportStatusReq) (*v1.GetExportStatusRes, error) {
-	userId, _ := ctx.Value(middleware.UserIdKey).(string)
-	if userId == "" {
-		return nil, fmt.Errorf("user not authenticated")
+func (s *sData) GetExportStatus(ctx context.Context, taskId uuid.UUID) (*model.TaskOutput[any, any], error) {
+	userIdStr := utils.RequireUserId(ctx)
+	userId, err := uuid.Parse(userIdStr)
+	if err != nil {
+		return nil, gerror.Wrap(err, "invalid user ID")
 	}
 
-	task, err := service.Task().GetTask(ctx, req.TaskId)
+	task, err := service.Task().GetTask(ctx, taskId)
 	if err != nil {
 		return nil, err
 	}
 
 	if task.UserId != userId {
-		return nil, fmt.Errorf("task not found")
+		return nil, gerror.New("task not found")
 	}
 
-	// Parse payload
-	var payload model.DataExportPayload
-	if task.Payload != nil {
-		if p, ok := task.Payload.(map[string]interface{}); ok {
-			// If payload is a map (from JSON unmarshal), convert it locally or just extract fields
-			// Since model.Task.Payload is interface{}, it might be a map or the struct depending on how it was loaded
-			// Here we assume standard JSON unmarshaling into interface{} resulted in a map
-			startDate, _ := p["startDate"].(string)
-			endDate, _ := p["endDate"].(string)
-			payload.StartDate = startDate
-			payload.EndDate = endDate
-		}
-		// If using gdb scan into model.Task, it might have been unmarshaled into map[string]interface{}
-	}
-
-	return &v1.GetExportStatusRes{
-		Task: &common.Task[v1.ExportParams, interface{}]{
-			TaskId:   task.Id,
-			Status:   task.Status,
-			Progress: task.Progress,
-			Payload: v1.ExportParams{
-				StartDate: payload.StartDate,
-				EndDate:   payload.EndDate,
-			},
-			Result: task.Result,
-		},
-	}, nil
+	return task, nil
 }
 
 // CheckImportLock checks if user has an active import that blocks mutations
 func CheckImportLock(ctx context.Context) error {
-	userId, _ := ctx.Value(middleware.UserIdKey).(string)
-	if userId == "" {
-		return nil
-	}
+	userId := utils.RequireUserId(ctx)
 
 	hasActive, err := dataimport.HasActiveImportTask(ctx, userId)
 	if err != nil {
@@ -261,7 +226,7 @@ func CheckImportLock(ctx context.Context) error {
 	}
 
 	if hasActive {
-		return fmt.Errorf("操作已暂停：正在导入数据，请等待导入完成后再试")
+		return gerror.New("操作已暂停：正在导入数据，请等待导入完成后再试")
 	}
 
 	return nil

@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package health.v1;
+
+option go_package = "gaap-api/api/health/v1;v1";
+
+service HealthService {
+  // Health check
+  rpc Health(HealthReq) returns (HealthRes);
+}
+
+message HealthReq {}
+
+message HealthRes {
+  string status = 1;
+}

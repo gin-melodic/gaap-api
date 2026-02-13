@@ -19,6 +19,7 @@ type AuthResponse struct {
 	Token        string        `json:"token,omitempty"`        // Deprecated: use AccessToken
 	AccessToken  string        `json:"accessToken,omitempty"`  // Short-lived access token
 	RefreshToken string        `json:"refreshToken,omitempty"` // Long-lived refresh token
+	SessionKey   string        `json:"sessionKey,omitempty"`   // ALE session key (hex encoded)
 	User         *entity.Users `json:"user"`
 }
 
@@ -26,6 +27,7 @@ type AuthResponse struct {
 type TokenPair struct {
 	AccessToken  string `json:"accessToken"`
 	RefreshToken string `json:"refreshToken"`
+	SessionKey   string `json:"sessionKey,omitempty"` // ALE session key (hex encoded)
 }
 
 type TwoFactorSecret struct {

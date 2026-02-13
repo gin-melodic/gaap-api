@@ -3,18 +3,21 @@ package auth
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"os"
 	"strings"
 	"time"
 
+	"gaap-api/internal/ale"
 	"gaap-api/internal/dao"
+	"gaap-api/internal/logic/utils"
 	"gaap-api/internal/model"
 	"gaap-api/internal/model/entity"
 	"gaap-api/internal/service"
 
+	"github.com/gogf/gf/v2/errors/gerror"
 	"github.com/gogf/gf/v2/frame/g"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/pquerna/otp/totp"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -29,12 +32,39 @@ func New() *sAuth {
 	return &sAuth{}
 }
 
-const (
-	// AccessTokenExpiry is the expiration time for access tokens (15 minutes)
-	AccessTokenExpiry = 15 * time.Minute
-	// RefreshTokenExpiry is the expiration time for refresh tokens (7 days)
-	RefreshTokenExpiry = 7 * 24 * time.Hour
-)
+// getAccessTokenExpiry returns the access token expiration time from environment variables or configuration
+func getAccessTokenExpiry(ctx context.Context) time.Duration {
+	// Try env first
+	if val := os.Getenv("JWT_ACCESS_TOKEN_EXPIRY"); val != "" {
+		if d, err := time.ParseDuration(val); err == nil {
+			return d
+		}
+	}
+	// Try config
+	if v, err := g.Cfg().Get(ctx, "jwt.accessTokenExpiry"); err == nil && !v.IsEmpty() {
+		if d, err := time.ParseDuration(v.String()); err == nil {
+			return d
+		}
+	}
+	return 15 * time.Minute
+}
+
+// getRefreshTokenExpiry returns the refresh token expiration time from environment variables or configuration
+func getRefreshTokenExpiry(ctx context.Context) time.Duration {
+	// Try env first
+	if val := os.Getenv("JWT_REFRESH_TOKEN_EXPIRY"); val != "" {
+		if d, err := time.ParseDuration(val); err == nil {
+			return d
+		}
+	}
+	// Try config
+	if v, err := g.Cfg().Get(ctx, "jwt.refreshTokenExpiry"); err == nil && !v.IsEmpty() {
+		if d, err := time.ParseDuration(v.String()); err == nil {
+			return d
+		}
+	}
+	return 7 * 24 * time.Hour
+}
 
 // getJwtSecret returns the JWT secret from environment variables or configuration
 func getJwtSecret(ctx context.Context) []byte {
@@ -48,7 +78,7 @@ func getJwtSecret(ctx context.Context) []byte {
 
 func (s *sAuth) Login(ctx context.Context, in model.LoginInput) (out *model.AuthResponse, err error) {
 	if in.Email == "" || in.Password == "" { // Check if email and password are provided
-		return nil, errors.New("email and password are required")
+		return nil, gerror.New("email and password are required")
 	}
 
 	var user *entity.Users
@@ -57,35 +87,44 @@ func (s *sAuth) Login(ctx context.Context, in model.LoginInput) (out *model.Auth
 		return nil, err
 	}
 	if user == nil {
-		return nil, errors.New("invalid email or password")
+		return nil, gerror.New("invalid email or password")
 	}
 
 	// Verify password (frontend sends SHA-256 hash, stored password is bcrypt hash of SHA-256)
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(in.Password)); err != nil {
-		return nil, errors.New("invalid email or password")
+		return nil, gerror.New("invalid email or password")
 	}
 
 	// Verify 2FA if enabled
 	if user.TwoFactorEnabled {
 		if in.Code == "" {
-			return nil, errors.New("2FA code required")
+			return nil, gerror.New("2FA code required")
 		}
 		valid := totp.Validate(in.Code, user.TwoFactorSecret)
 		if !valid {
-			return nil, errors.New("invalid 2FA code")
+			return nil, gerror.New("invalid 2FA code")
 		}
 	}
 
 	// Generate Token Pair
-	accessToken, refreshToken, err := generateTokenPair(user.Id)
+	accessToken, refreshToken, err := generateTokenPair(ctx, user.Id.String())
 	if err != nil {
 		return nil, err
+	}
+
+	// Generate ALE session key
+	sessionKey, err := ale.GenerateAndStoreSessionKey(ctx, user.Id.String())
+	if err != nil {
+		g.Log().Warningf(ctx, "Failed to generate ALE session key: %v", err)
+		// Don't fail login if session key generation fails
+		sessionKey = ""
 	}
 
 	out = &model.AuthResponse{
 		Token:        accessToken, // Deprecated, for backward compatibility
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
+		SessionKey:   sessionKey,
 		User:         user,
 	}
 	return
@@ -98,68 +137,94 @@ func (s *sAuth) Register(ctx context.Context, in model.RegisterInput) (out *mode
 		// return nil, errors.New("turnstile token required")
 	} else {
 		if !verifyTurnstile(ctx, in.CfTurnstileResponse) {
-			return nil, errors.New("invalid turnstile token")
+			return nil, gerror.New("invalid turnstile token")
 		}
+	}
+
+	if in.Email == "" {
+		return nil, gerror.New("email is required")
 	}
 
 	// Check email
 	count, err := dao.Users.Ctx(ctx).Where("email", in.Email).Count()
 	if err != nil {
-		return nil, err
+		return nil, gerror.Wrap(err, "failed to check email")
 	}
 	if count > 0 {
-		return nil, errors.New("email already exists")
+		return nil, gerror.New("email already exists")
 	}
 
 	// Hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, err
+		return nil, gerror.Wrap(err, "failed to hash password")
 	}
 
 	// Create user
-	// Use g.Map to avoid sending empty ID, letting DB generate it
-	_, err = dao.Users.Ctx(ctx).Data(g.Map{
-		"email":    in.Email,
-		"nickname": in.Nickname,
-		"plan":     "FREE",
-		"password": string(hashedPassword),
-	}).Insert()
-	if err != nil {
-		return nil, err
+	user := &entity.Users{
+		Id:           uuid.New(),
+		Email:        in.Email,
+		Password:     string(hashedPassword),
+		Plan:         utils.UserLevelFree,
+		MainCurrency: "USD",
+	}
+	// Try to get a default theme
+	var theme *entity.Themes
+	if err := dao.Themes.Ctx(ctx).Limit(1).Scan(&theme); err == nil && theme != nil {
+		user.ThemeId = theme.Id
 	}
 
-	// Fetch the created user to get the generated ID
-	var user *entity.Users
-	err = dao.Users.Ctx(ctx).Where("email", in.Email).Scan(&user)
-	if err != nil {
-		return nil, err
+	// Insert user
+	// If ThemeId is still zero (no theme found), we MUST omit it from the insert
+	// so that the database receives a NULL (which is allowed) instead of a zero UUID (which violates FK)
+	if user.ThemeId != uuid.Nil {
+		_, err = dao.Users.Ctx(ctx).Insert(user)
+	} else {
+		// Construct map to exclude theme_id (implicit NULL) or set explicit NULL
+		c := dao.Users.Columns()
+		data := g.Map{
+			c.Id:               user.Id,
+			c.Email:            user.Email,
+			c.Password:         user.Password,
+			c.MainCurrency:     user.MainCurrency,
+			c.Plan:             user.Plan,
+			c.TwoFactorEnabled: user.TwoFactorEnabled,
+			c.Nickname:         user.Nickname,
+			c.Avatar:           user.Avatar,
+			c.ThemeId:          nil,
+		}
+		_, err = dao.Users.Ctx(ctx).Data(data).Insert()
 	}
-	if user == nil {
-		return nil, errors.New("failed to create user")
+	if err != nil {
+		return nil, gerror.Wrap(err, "failed to create user")
 	}
 
 	// Generate Token Pair
-	accessToken, refreshToken, err := generateTokenPair(user.Id)
+	accessToken, refreshToken, err := generateTokenPair(ctx, user.Id.String())
 	if err != nil {
 		return nil, err
+	}
+
+	// Generate ALE session key
+	sessionKey, err := ale.GenerateAndStoreSessionKey(ctx, user.Id.String())
+	if err != nil {
+		g.Log().Warningf(ctx, "Failed to generate ALE session key: %v", err)
+		// Don't fail registration if session key generation fails
+		sessionKey = ""
 	}
 
 	out = &model.AuthResponse{
 		Token:        accessToken, // Deprecated, for backward compatibility
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
+		SessionKey:   sessionKey,
 		User:         user,
 	}
 	return
 }
 
 func (s *sAuth) Generate2FA(ctx context.Context) (out *model.TwoFactorSecret, err error) {
-	// Get current user ID from context (assuming middleware sets it)
-	userId := ctx.Value("userId")
-	if userId == nil {
-		return nil, errors.New("unauthorized")
-	}
+	userId := utils.RequireUserId(ctx)
 
 	var user *entity.Users
 	err = dao.Users.Ctx(ctx).Where("id", userId).Scan(&user)
@@ -167,7 +232,7 @@ func (s *sAuth) Generate2FA(ctx context.Context) (out *model.TwoFactorSecret, er
 		return nil, err
 	}
 	if user == nil {
-		return nil, errors.New("user not found")
+		return nil, gerror.New("user not found")
 	}
 
 	key, err := totp.Generate(totp.GenerateOpts{
@@ -195,10 +260,7 @@ func (s *sAuth) Generate2FA(ctx context.Context) (out *model.TwoFactorSecret, er
 }
 
 func (s *sAuth) Enable2FA(ctx context.Context, code string) (err error) {
-	userId := ctx.Value("userId")
-	if userId == nil {
-		return errors.New("unauthorized")
-	}
+	userId := utils.RequireUserId(ctx)
 
 	var user *entity.Users
 	err = dao.Users.Ctx(ctx).Where("id", userId).Scan(&user)
@@ -207,12 +269,12 @@ func (s *sAuth) Enable2FA(ctx context.Context, code string) (err error) {
 	}
 
 	if user.TwoFactorSecret == "" {
-		return errors.New("please generate 2FA secret first")
+		return gerror.New("please generate 2FA secret first")
 	}
 
 	valid := totp.Validate(code, user.TwoFactorSecret)
 	if !valid {
-		return errors.New("invalid 2FA code")
+		return gerror.New("invalid 2FA code")
 	}
 
 	_, err = dao.Users.Ctx(ctx).Where("id", userId).Data(g.Map{
@@ -222,10 +284,7 @@ func (s *sAuth) Enable2FA(ctx context.Context, code string) (err error) {
 }
 
 func (s *sAuth) Disable2FA(ctx context.Context, code string, password string) (err error) {
-	userId := ctx.Value("userId")
-	if userId == nil {
-		return errors.New("unauthorized")
-	}
+	userId := utils.RequireUserId(ctx)
 
 	var user *entity.Users
 	err = dao.Users.Ctx(ctx).Where("id", userId).Scan(&user)
@@ -236,13 +295,13 @@ func (s *sAuth) Disable2FA(ctx context.Context, code string, password string) (e
 	// Verify password
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
 	if err != nil {
-		return errors.New("invalid password")
+		return gerror.New("invalid password")
 	}
 
 	// Verify code
 	valid := totp.Validate(code, user.TwoFactorSecret)
 	if !valid {
-		return errors.New("invalid 2FA code")
+		return gerror.New("invalid 2FA code")
 	}
 
 	_, err = dao.Users.Ctx(ctx).Where("id", userId).Data(g.Map{
@@ -263,32 +322,31 @@ func (s *sAuth) RefreshToken(ctx context.Context, refreshTokenStr string) (out *
 	})
 
 	if err != nil || !token.Valid {
-		return nil, errors.New("invalid or expired refresh token")
+		return nil, gerror.New("invalid or expired refresh token")
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		return nil, errors.New("invalid token claims")
+		return nil, gerror.New("invalid token claims")
 	}
 
 	// Verify it's a refresh token
 	tokenType, _ := claims["type"].(string)
 	if tokenType != "refresh" {
-		return nil, errors.New("invalid token type, refresh token required")
+		return nil, gerror.New("invalid token type, refresh token required")
 	}
 
 	// Check if token is blacklisted
 	if IsBlacklisted(refreshTokenStr) {
-		return nil, errors.New("token has been revoked")
+		return nil, gerror.New("token has been revoked")
 	}
 
 	userId, ok := claims["userId"].(string)
 	if !ok || userId == "" {
-		return nil, errors.New("invalid token: missing userId")
+		return nil, gerror.New("invalid token: missing userId")
 	}
 
-	// Generate new token pair
-	accessToken, newRefreshToken, err := generateTokenPair(userId)
+	accessToken, newRefreshToken, err := generateTokenPair(ctx, userId)
 	if err != nil {
 		return nil, err
 	}
@@ -297,9 +355,19 @@ func (s *sAuth) RefreshToken(ctx context.Context, refreshTokenStr string) (out *
 	exp, _ := claims["exp"].(float64)
 	AddToBlacklist(refreshTokenStr, time.Unix(int64(exp), 0))
 
+	// Refresh ALE session key TTL
+	if err := ale.RefreshSessionKeyTTL(ctx, userId); err != nil {
+		g.Log().Warningf(ctx, "Failed to refresh ALE session key TTL: %v", err)
+		// Don't fail refresh if session key TTL refresh fails
+	}
+
+	// Get current session key for the response
+	sessionKey, _ := ale.GetSessionKey(ctx, userId)
+
 	out = &model.TokenPair{
 		AccessToken:  accessToken,
 		RefreshToken: newRefreshToken,
+		SessionKey:   sessionKey,
 	}
 	return
 }
@@ -325,7 +393,7 @@ func (s *sAuth) AddTokenToBlacklist(ctx context.Context, tokenStr string) {
 
 	// Default expiration if we couldn't parse it
 	if expTime.IsZero() {
-		expTime = time.Now().Add(RefreshTokenExpiry)
+		expTime = time.Now().Add(getRefreshTokenExpiry(ctx))
 	}
 
 	AddToBlacklist(tokenStr, expTime)
@@ -337,14 +405,14 @@ func (s *sAuth) IsTokenBlacklisted(ctx context.Context, token string) bool {
 }
 
 // generateTokenPair generates an access token and refresh token for a user
-func generateTokenPair(userId string) (accessToken, refreshToken string, err error) {
+func generateTokenPair(ctx context.Context, userId string) (accessToken, refreshToken string, err error) {
 	// Access Token (short-lived)
 	accessClaims := jwt.MapClaims{
 		"userId": userId,
 		"type":   "access",
-		"exp":    time.Now().Add(AccessTokenExpiry).Unix(),
+		"exp":    time.Now().Add(getAccessTokenExpiry(ctx)).Unix(),
 	}
-	accessToken, err = jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims).SignedString(getJwtSecret(context.Background()))
+	accessToken, err = jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims).SignedString(getJwtSecret(ctx))
 	if err != nil {
 		return "", "", err
 	}
@@ -353,9 +421,9 @@ func generateTokenPair(userId string) (accessToken, refreshToken string, err err
 	refreshClaims := jwt.MapClaims{
 		"userId": userId,
 		"type":   "refresh",
-		"exp":    time.Now().Add(RefreshTokenExpiry).Unix(),
+		"exp":    time.Now().Add(getRefreshTokenExpiry(ctx)).Unix(),
 	}
-	refreshToken, err = jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims).SignedString(getJwtSecret(context.Background()))
+	refreshToken, err = jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims).SignedString(getJwtSecret(ctx))
 	if err != nil {
 		return "", "", err
 	}

@@ -3,14 +3,17 @@ package boot
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"gaap-api/internal/dao"
+	"gaap-api/internal/logic/dashboard"
+	"gaap-api/internal/logic/utils"
 	"gaap-api/internal/model/entity"
+	"gaap-api/internal/redis"
 
-	"github.com/gogf/gf/v2/database/gredis"
+	"github.com/gogf/gf/v2/errors/gerror"
 	"github.com/gogf/gf/v2/frame/g"
+	"github.com/shopspring/decimal"
 )
 
 const (
@@ -50,13 +53,16 @@ func SyncBalances(ctx context.Context) {
 	}
 
 	g.Log().Info(ctx, "Balance synchronization completed successfully.")
+
+	// After balance sync, warm dashboard snapshots for all users
+	go WarmDashboardSnapshots(ctx)
 }
 
 // acquireDistributedLock tries to acquire a Redis distributed lock.
 // Returns true if lock acquired, false otherwise.
 func acquireDistributedLock(ctx context.Context) bool {
-	redis := getRedisClient(ctx)
-	if redis == nil {
+	redisClient, err := redis.GetRedisClient(ctx, redis.RedisTypeSyncLock)
+	if err != nil {
 		g.Log().Warning(ctx, "Redis not configured. Running balance sync without distributed lock.")
 		return true // Proceed without lock if Redis not available
 	}
@@ -64,7 +70,7 @@ func acquireDistributedLock(ctx context.Context) bool {
 	// SET key value NX PX milliseconds
 	// NX: Only set if not exists
 	// PX: Expire in milliseconds
-	result, err := redis.Do(ctx, "SET", balanceSyncLockKey, balanceSyncLockValue, "NX", "PX", balanceSyncLockTimeout)
+	result, err := redisClient.Do(ctx, "SET", balanceSyncLockKey, balanceSyncLockValue, "NX", "PX", balanceSyncLockTimeout)
 	if err != nil {
 		g.Log().Warningf(ctx, "Failed to acquire Redis lock: %v. Proceeding without lock.", err)
 		return true // Proceed without lock on error
@@ -76,8 +82,9 @@ func acquireDistributedLock(ctx context.Context) bool {
 
 // releaseDistributedLock releases the Redis distributed lock.
 func releaseDistributedLock(ctx context.Context) {
-	redis := getRedisClient(ctx)
-	if redis == nil {
+	redisClient, err := redis.GetRedisClient(ctx, redis.RedisTypeSyncLock)
+	if err != nil {
+		g.Log().Warning(ctx, "Redis not configured. Running balance sync without distributed lock.")
 		return
 	}
 
@@ -90,44 +97,10 @@ func releaseDistributedLock(ctx context.Context) {
 			return 0
 		end
 	`
-	_, err := redis.Do(ctx, "EVAL", luaScript, 1, balanceSyncLockKey, balanceSyncLockValue)
+	_, err = redisClient.Do(ctx, "EVAL", luaScript, 1, balanceSyncLockKey, balanceSyncLockValue)
 	if err != nil {
 		g.Log().Warningf(ctx, "Failed to release Redis lock: %v", err)
 	}
-}
-
-// getRedisClient returns the Redis client if configured.
-func getRedisClient(ctx context.Context) *gredis.Redis {
-	host := os.Getenv("REDIS_HOST")
-	if host == "" {
-		return nil
-	}
-
-	port := os.Getenv("REDIS_PORT")
-	if port == "" {
-		port = "6379"
-	}
-	password := os.Getenv("REDIS_PASSWORD")
-
-	config := &gredis.Config{
-		Address: fmt.Sprintf("%s:%s", host, port),
-		Pass:    password,
-		Db:      0, // Use db 0 for locks
-	}
-
-	redis, err := gredis.New(config)
-	if err != nil {
-		g.Log().Warningf(ctx, "Failed to create Redis client: %v", err)
-		return nil
-	}
-
-	// Test connection
-	if _, err := redis.Do(ctx, "PING"); err != nil {
-		g.Log().Warningf(ctx, "Failed to connect to Redis: %v", err)
-		return nil
-	}
-
-	return redis
 }
 
 // performBalanceSync recalculates and updates all account balances.
@@ -153,21 +126,24 @@ func performBalanceSync(ctx context.Context) error {
 	// Calculate expected balance for each account
 	updatedCount := 0
 	for _, account := range accounts {
-		expectedBalance, err := calculateExpectedBalance(ctx, account.Id)
+		expectedMoney, err := calculateExpectedBalance(account.Id.String())
 		if err != nil {
 			g.Log().Warningf(ctx, "Failed to calculate balance for account %s: %v", account.Id, err)
 			continue
 		}
 
+		accountMoney := utils.NewFromEntity(&account)
+
 		// Check if balance needs update
-		if account.Balance != expectedBalance {
-			g.Log().Infof(ctx, "Account %s (%s): current=%.2f, expected=%.2f. Updating...",
-				account.Id, account.Name, account.Balance, expectedBalance)
+		if !accountMoney.Equals(expectedMoney) {
+			g.Log().Infof(ctx, "Account %s (%s): current=%s, expected=%s. Updating...",
+				account.Id, account.Name, accountMoney.Decimal, expectedMoney.Decimal)
 
 			// Update balance
+			expectedBalanceUnits, expectedBalanceNanos := expectedMoney.ToEntityValues()
 			_, err = g.DB().Model(dao.Accounts.Table()).
 				Where("id", account.Id).
-				Data(g.Map{"balance": expectedBalance}).
+				Data(g.Map{"balance_units": expectedBalanceUnits, "balance_nanos": expectedBalanceNanos}).
 				Update()
 			if err != nil {
 				g.Log().Warningf(ctx, "Failed to update balance for account %s: %v", account.Id, err)
@@ -185,72 +161,128 @@ func performBalanceSync(ctx context.Context) error {
 }
 
 // calculateExpectedBalance calculates the expected balance for an account based on transactions.
-func calculateExpectedBalance(ctx context.Context, accountId string) (float64, error) {
-	var balance float64 = 0
+func calculateExpectedBalance(accountId string) (*utils.MoneyHelper, error) {
+	balance := &utils.MoneyHelper{
+		Decimal:  decimal.NewFromInt(0),
+		Currency: "",
+	}
 
 	// Sum of INCOME transactions where this account is the to_account
 	// INCOME: money comes into to_account
-	var incomeSum struct {
-		Total float64
-	}
+	var incomeTransactions []entity.Transactions
 	err := g.DB().Model(dao.Transactions.Table()).
-		Fields("COALESCE(SUM(amount), 0) as total").
 		Where("to_account_id", accountId).
 		Where("type", TypeIncome).
 		Where("deleted_at IS NULL").
-		Scan(&incomeSum)
+		Scan(&incomeTransactions)
 	if err != nil {
-		return 0, fmt.Errorf("failed to sum income: %w", err)
+		return nil, gerror.Wrap(err, "failed to get income transactions")
 	}
-	balance += incomeSum.Total
+	incomeSum := &utils.MoneyHelper{
+		Decimal:  decimal.NewFromInt(0),
+		Currency: "",
+	}
+	for _, t := range incomeTransactions {
+		incomeSum, err = incomeSum.Add(utils.NewFromTransactions(&t))
+	}
+	if err != nil {
+		return nil, gerror.Wrap(err, "failed to sum income")
+	}
+
+	balance, err = balance.Add(incomeSum)
+	if err != nil {
+		return nil, gerror.Wrap(err, "failed to add income")
+	}
 
 	// Sum of TRANSFER transactions where this account is the to_account
 	// TRANSFER: money comes into to_account
-	var transferInSum struct {
-		Total float64
-	}
+	var transferInTransactions []entity.Transactions
 	err = g.DB().Model(dao.Transactions.Table()).
-		Fields("COALESCE(SUM(amount), 0) as total").
 		Where("to_account_id", accountId).
 		Where("type", TypeTransfer).
 		Where("deleted_at IS NULL").
-		Scan(&transferInSum)
+		Scan(&transferInTransactions)
 	if err != nil {
-		return 0, fmt.Errorf("failed to sum transfer in: %w", err)
+		return nil, gerror.Wrap(err, "failed to get transfer in transactions")
 	}
-	balance += transferInSum.Total
+	transferInSum := &utils.MoneyHelper{
+		Decimal:  decimal.NewFromInt(0),
+		Currency: "",
+	}
+	for _, t := range transferInTransactions {
+		transferInSum, err = transferInSum.Add(utils.NewFromTransactions(&t))
+	}
+	if err != nil {
+		return nil, gerror.Wrap(err, "failed to sum transfer in")
+	}
+
+	balance, err = balance.Add(transferInSum)
+	if err != nil {
+		return nil, gerror.Wrap(err, "failed to add transfer in")
+	}
 
 	// Sum of EXPENSE transactions where this account is the from_account
 	// EXPENSE: money goes out from from_account
-	var expenseSum struct {
-		Total float64
-	}
+	var expenseTransactions []entity.Transactions
 	err = g.DB().Model(dao.Transactions.Table()).
-		Fields("COALESCE(SUM(amount), 0) as total").
 		Where("from_account_id", accountId).
 		Where("type", TypeExpense).
 		Where("deleted_at IS NULL").
-		Scan(&expenseSum)
+		Scan(&expenseTransactions)
 	if err != nil {
-		return 0, fmt.Errorf("failed to sum expense: %w", err)
+		return nil, gerror.Wrap(err, "failed to get expense transactions")
 	}
-	balance -= expenseSum.Total
+	expenseSum := &utils.MoneyHelper{
+		Decimal:  decimal.NewFromInt(0),
+		Currency: "",
+	}
+	for _, t := range expenseTransactions {
+		expenseSum, err = expenseSum.Add(utils.NewFromTransactions(&t))
+	}
+	if err != nil {
+		return nil, gerror.Wrap(err, "failed to sum expense")
+	}
 
-	// Sum of TRANSFER transactions where this account is the from_account
-	// TRANSFER: money goes out from from_account
-	var transferOutSum struct {
-		Total float64
-	}
-	err = g.DB().Model(dao.Transactions.Table()).
-		Fields("COALESCE(SUM(amount), 0) as total").
-		Where("from_account_id", accountId).
-		Where("type", TypeTransfer).
-		Where("deleted_at IS NULL").
-		Scan(&transferOutSum)
+	balance, err = balance.Sub(expenseSum)
 	if err != nil {
-		return 0, fmt.Errorf("failed to sum transfer out: %w", err)
+		return nil, gerror.Wrap(err, "failed to sub expense")
 	}
-	balance -= transferOutSum.Total
 
 	return balance, nil
+}
+
+// WarmDashboardSnapshots pre-builds dashboard Redis snapshots for all users.
+// Called once at startup after balance sync to ensure first dashboard load is instant.
+// On cold start, it tries restoring from DB first (fast) and only falls back to
+// full recompute if no persisted snapshot exists.
+func WarmDashboardSnapshots(ctx context.Context) {
+	g.Log().Info(ctx, "Warming dashboard snapshots for all users...")
+
+	var users []struct {
+		Id string `orm:"id"`
+	}
+	err := g.DB().Model("users").Fields("id").Scan(&users)
+	if err != nil {
+		g.Log().Warningf(ctx, "Failed to query users for dashboard warmup: %v", err)
+		return
+	}
+
+	restoredCount := 0
+	rebuiltCount := 0
+	for _, u := range users {
+		// Try fast path: restore from DB snapshot
+		restored := dashboard.RestoreSnapshotsFromDB(ctx, u.Id)
+		if restored {
+			restoredCount++
+			continue
+		}
+		// Slow path: full recompute from transactional data
+		if err := dashboard.RebuildSnapshots(ctx, u.Id); err != nil {
+			g.Log().Warningf(ctx, "Failed to warm dashboard snapshot for user %s: %v", u.Id, err)
+		}
+		rebuiltCount++
+	}
+
+	g.Log().Infof(ctx, "Dashboard warmup completed: %d users (%d restored from DB, %d rebuilt)",
+		len(users), restoredCount, rebuiltCount)
 }

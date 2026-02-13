@@ -12,18 +12,20 @@ import (
 // Accounts is the golang structure of table accounts for DAO operations like Where/Data.
 type Accounts struct {
 	g.Meta         `orm:"table:accounts, do:true"`
-	Id             interface{} //
-	UserId         interface{} //
-	ParentId       interface{} //
-	Name           interface{} //
-	Type           interface{} //
-	IsGroup        interface{} //
-	Balance        interface{} //
-	Currency       interface{} //
-	DefaultChildId interface{} //
+	Id             any         //
+	UserId         any         //
+	ParentId       any         //
+	Name           any         //
+	Type           any         //
+	IsGroup        any         //
+	CurrencyCode   any         //
+	BalanceUnits   any         //
+	BalanceNanos   any         //
+	BalanceDecimal any         //
+	DefaultChildId any         //
 	Date           *gtime.Time //
-	Number         interface{} //
-	Remarks        interface{} //
+	Number         any         //
+	Remarks        any         //
 	CreatedAt      *gtime.Time //
 	UpdatedAt      *gtime.Time //
 	DeletedAt      *gtime.Time //
