@@ -165,6 +165,7 @@ func (s *sAuth) Register(ctx context.Context, in model.RegisterInput) (out *mode
 		Id:           uuid.New(),
 		Email:        in.Email,
 		Password:     string(hashedPassword),
+		Plan:         utils.UserLevelFree,
 		MainCurrency: "USD",
 	}
 	// Try to get a default theme
