@@ -54,6 +54,7 @@ message RegisterReq {
   string password = 2;
   string nickname = 3;
   string cf_turnstile_response = 4;
+  string main_currency = 5;
 }
 
 message RegisterRes {

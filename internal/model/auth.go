@@ -13,6 +13,7 @@ type RegisterInput struct {
 	Password            string `json:"password" v:"required|min-length:8"`
 	Nickname            string `json:"nickname" v:"required|max-length:50"`
 	CfTurnstileResponse string `json:"cf_turnstile_response"`
+	MainCurrency        string `json:"main_currency"`
 }
 
 type AuthResponse struct {
