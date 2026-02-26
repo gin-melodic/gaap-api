@@ -23,6 +23,7 @@ type (
 		AddTokenToBlacklist(ctx context.Context, tokenStr string)
 		// IsTokenBlacklisted checks if a token is in the blacklist
 		IsTokenBlacklisted(ctx context.Context, token string) bool
+		UpdatePassword(ctx context.Context, password string, newPassword string, confirmPassword string) error
 	}
 )
 

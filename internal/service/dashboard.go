@@ -14,11 +14,13 @@ import (
 
 type (
 	IDashboard interface {
-		// GetDashboardSummary calculates total assets, liabilities, and net worth for the current user
+		// GetDashboardSummary returns the dashboard summary from a Redis snapshot.
+		// The snapshot is pre-computed asynchronously via RabbitMQ whenever transactions
+		// or account balances change. Falls back to DB computation on cold start / cache miss.
 		GetDashboardSummary(ctx context.Context) (out *model.DashboardSummary, err error)
-		// GetMonthlyStats calculates income and expense for the current month
+		// GetMonthlyStats returns the monthly income/expense from a Redis snapshot.
 		GetMonthlyStats(ctx context.Context) (out *model.MonthlyStats, err error)
-		// GetBalanceTrend returns daily balance snapshots for specified accounts
+		// GetBalanceTrend returns daily balance snapshots from Redis.
 		GetBalanceTrend(ctx context.Context, accounts []uuid.UUID) (out []model.DailyBalance, err error)
 	}
 )

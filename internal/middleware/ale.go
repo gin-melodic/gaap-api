@@ -43,6 +43,21 @@ func ALEMiddleware(mode ALEMode) func(r *ghttp.Request) {
 			return
 		}
 
+		// Skip Session mode validation for public auth routes
+		// These routes need Bootstrap key for decryption, but not Session key for user validation
+		if mode == ALEModeSession {
+			publicAuthPaths := map[string]bool{
+				"/v1/auth/login":         true,
+				"/v1/auth/register":      true,
+				"/v1/auth/refresh-token": true,
+				"/v1/auth/logout":        true,
+			}
+			if publicAuthPaths[r.URL.Path] {
+				// For public routes, use Bootstrap key for decryption instead of Session key
+				mode = ALEModeBootstrap
+			}
+		}
+
 		// Check Content-Type - only process binary streams
 		contentType := r.Header.Get("Content-Type")
 		if contentType != "application/octet-stream" {
@@ -166,7 +181,7 @@ func ALEMiddleware(mode ALEMode) func(r *ghttp.Request) {
 			return
 		}
 
-		g.Log().Infof(ctx, "ALE Decrypted Request Content: %s", string(plaintext))
+		g.Log().Debugf(ctx, "ALE Decrypted raw bytes: %s", string(plaintext))
 
 		// Store decrypted protobuf bytes in context for controller parsing
 		// Controllers should use utility/proto.ParseFromALE() to extract the message

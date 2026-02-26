@@ -28,6 +28,19 @@ service AuthService {
   
   // Disable 2FA
   rpc Disable2FA(Disable2FAReq) returns (Disable2FARes);
+  
+  // Update password
+  rpc UpdatePassword(UpdatePasswordReq) returns (UpdatePasswordRes);
+}
+
+message UpdatePasswordReq {
+    string password = 1;
+    string new_password = 2;
+    string confirm_password = 3;
+}
+
+message UpdatePasswordRes {
+    base.BaseResponse base = 255;
 }
 
 message AuthResponse {

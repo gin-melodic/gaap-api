@@ -7,7 +7,7 @@ package auth
 import (
 	"context"
 
-	"gaap-api/api/auth/v1"
+	v1 "gaap-api/api/auth/v1"
 )
 
 type IAuthV1 interface {
@@ -18,4 +18,5 @@ type IAuthV1 interface {
 	GfGenerate2FA(ctx context.Context, req *v1.GfGenerate2FAReq) (res *v1.GfGenerate2FARes, err error)
 	GfEnable2FA(ctx context.Context, req *v1.GfEnable2FAReq) (res *v1.GfEnable2FARes, err error)
 	GfDisable2FA(ctx context.Context, req *v1.GfDisable2FAReq) (res *v1.GfDisable2FARes, err error)
+	GfUpdatePassword(ctx context.Context, req *v1.GfUpdatePasswordReq) (res *v1.GfUpdatePasswordRes, err error)
 }

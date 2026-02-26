@@ -17,6 +17,7 @@ type (
 	IAccount interface {
 		ListAccounts(ctx context.Context, in model.AccountQueryInput) (out []entity.Accounts, total int, err error)
 		CreateAccount(ctx context.Context, in model.AccountCreateInput) (out *entity.Accounts, err error)
+		// GetAccount returns an account by ID with caching.
 		GetAccount(ctx context.Context, id uuid.UUID) (out *entity.Accounts, err error)
 		UpdateAccount(ctx context.Context, id uuid.UUID, in model.AccountUpdateInput) (out *entity.Accounts, err error)
 		DeleteAccount(ctx context.Context, id uuid.UUID, migrationTargets map[string]uuid.UUID) (taskId string, err error)

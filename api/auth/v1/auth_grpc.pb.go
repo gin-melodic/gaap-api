@@ -20,13 +20,14 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AuthService_Login_FullMethodName        = "/auth.v1.AuthService/Login"
-	AuthService_Register_FullMethodName     = "/auth.v1.AuthService/Register"
-	AuthService_Logout_FullMethodName       = "/auth.v1.AuthService/Logout"
-	AuthService_RefreshToken_FullMethodName = "/auth.v1.AuthService/RefreshToken"
-	AuthService_Generate2FA_FullMethodName  = "/auth.v1.AuthService/Generate2FA"
-	AuthService_Enable2FA_FullMethodName    = "/auth.v1.AuthService/Enable2FA"
-	AuthService_Disable2FA_FullMethodName   = "/auth.v1.AuthService/Disable2FA"
+	AuthService_Login_FullMethodName          = "/auth.v1.AuthService/Login"
+	AuthService_Register_FullMethodName       = "/auth.v1.AuthService/Register"
+	AuthService_Logout_FullMethodName         = "/auth.v1.AuthService/Logout"
+	AuthService_RefreshToken_FullMethodName   = "/auth.v1.AuthService/RefreshToken"
+	AuthService_Generate2FA_FullMethodName    = "/auth.v1.AuthService/Generate2FA"
+	AuthService_Enable2FA_FullMethodName      = "/auth.v1.AuthService/Enable2FA"
+	AuthService_Disable2FA_FullMethodName     = "/auth.v1.AuthService/Disable2FA"
+	AuthService_UpdatePassword_FullMethodName = "/auth.v1.AuthService/UpdatePassword"
 )
 
 // AuthServiceClient is the client API for AuthService service.
@@ -47,6 +48,8 @@ type AuthServiceClient interface {
 	Enable2FA(ctx context.Context, in *Enable2FAReq, opts ...grpc.CallOption) (*Enable2FARes, error)
 	// Disable 2FA
 	Disable2FA(ctx context.Context, in *Disable2FAReq, opts ...grpc.CallOption) (*Disable2FARes, error)
+	// Update password
+	UpdatePassword(ctx context.Context, in *UpdatePasswordReq, opts ...grpc.CallOption) (*UpdatePasswordRes, error)
 }
 
 type authServiceClient struct {
@@ -127,6 +130,16 @@ func (c *authServiceClient) Disable2FA(ctx context.Context, in *Disable2FAReq, o
 	return out, nil
 }
 
+func (c *authServiceClient) UpdatePassword(ctx context.Context, in *UpdatePasswordReq, opts ...grpc.CallOption) (*UpdatePasswordRes, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdatePasswordRes)
+	err := c.cc.Invoke(ctx, AuthService_UpdatePassword_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AuthServiceServer is the server API for AuthService service.
 // All implementations must embed UnimplementedAuthServiceServer
 // for forward compatibility.
@@ -145,6 +158,8 @@ type AuthServiceServer interface {
 	Enable2FA(context.Context, *Enable2FAReq) (*Enable2FARes, error)
 	// Disable 2FA
 	Disable2FA(context.Context, *Disable2FAReq) (*Disable2FARes, error)
+	// Update password
+	UpdatePassword(context.Context, *UpdatePasswordReq) (*UpdatePasswordRes, error)
 	mustEmbedUnimplementedAuthServiceServer()
 }
 
@@ -175,6 +190,9 @@ func (UnimplementedAuthServiceServer) Enable2FA(context.Context, *Enable2FAReq) 
 }
 func (UnimplementedAuthServiceServer) Disable2FA(context.Context, *Disable2FAReq) (*Disable2FARes, error) {
 	return nil, status.Error(codes.Unimplemented, "method Disable2FA not implemented")
+}
+func (UnimplementedAuthServiceServer) UpdatePassword(context.Context, *UpdatePasswordReq) (*UpdatePasswordRes, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdatePassword not implemented")
 }
 func (UnimplementedAuthServiceServer) mustEmbedUnimplementedAuthServiceServer() {}
 func (UnimplementedAuthServiceServer) testEmbeddedByValue()                     {}
@@ -323,6 +341,24 @@ func _AuthService_Disable2FA_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthService_UpdatePassword_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdatePasswordReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).UpdatePassword(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_UpdatePassword_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).UpdatePassword(ctx, req.(*UpdatePasswordReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AuthService_ServiceDesc is the grpc.ServiceDesc for AuthService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -357,6 +393,10 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Disable2FA",
 			Handler:    _AuthService_Disable2FA_Handler,
+		},
+		{
+			MethodName: "UpdatePassword",
+			Handler:    _AuthService_UpdatePassword_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

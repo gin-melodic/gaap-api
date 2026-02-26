@@ -32,6 +32,18 @@ func getJwtSecret(ctx context.Context) []byte {
 
 // AuthMiddleware validates JWT token and injects userId into context
 func AuthMiddleware(r *ghttp.Request) {
+	// Skip auth for public auth routes (login, register, refresh-token, logout)
+	publicPaths := map[string]bool{
+		"/v1/auth/login":         true,
+		"/v1/auth/register":      true,
+		"/v1/auth/refresh-token": true,
+		"/v1/auth/logout":        true,
+	}
+	if publicPaths[r.URL.Path] {
+		r.Middleware.Next()
+		return
+	}
+
 	// Get Authorization header
 	authHeader := r.GetHeader("Authorization")
 	if authHeader == "" {

@@ -2,6 +2,8 @@ package auth
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"strings"
@@ -14,6 +16,7 @@ import (
 	"gaap-api/internal/model/entity"
 	"gaap-api/internal/service"
 
+	"github.com/gogf/gf/v2/database/gdb"
 	"github.com/gogf/gf/v2/errors/gerror"
 	"github.com/gogf/gf/v2/frame/g"
 	"github.com/golang-jwt/jwt/v5"
@@ -82,7 +85,7 @@ func (s *sAuth) Login(ctx context.Context, in model.LoginInput) (out *model.Auth
 	}
 
 	var user *entity.Users
-	err = dao.Users.Ctx(ctx).Where("email", in.Email).Scan(&user)
+	err = dao.Users.Ctx(ctx).Where(dao.Users.Columns().Email, in.Email).Scan(&user)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +149,7 @@ func (s *sAuth) Register(ctx context.Context, in model.RegisterInput) (out *mode
 	}
 
 	// Check email
-	count, err := dao.Users.Ctx(ctx).Where("email", in.Email).Count()
+	count, err := dao.Users.Ctx(ctx).Where(dao.Users.Columns().Email, in.Email).Count()
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to check email")
 	}
@@ -155,7 +158,8 @@ func (s *sAuth) Register(ctx context.Context, in model.RegisterInput) (out *mode
 	}
 
 	// Hash password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
+	hashedPwd := sha256.Sum256([]byte(in.Password))
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(hex.EncodeToString(hashedPwd[:])), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to hash password")
 	}
@@ -227,7 +231,7 @@ func (s *sAuth) Generate2FA(ctx context.Context) (out *model.TwoFactorSecret, er
 	userId := utils.RequireUserId(ctx)
 
 	var user *entity.Users
-	err = dao.Users.Ctx(ctx).Where("id", userId).Scan(&user)
+	err = dao.Users.Ctx(ctx).Where(dao.Users.Columns().Id, userId).Scan(&user)
 	if err != nil {
 		return nil, err
 	}
@@ -244,9 +248,9 @@ func (s *sAuth) Generate2FA(ctx context.Context) (out *model.TwoFactorSecret, er
 	}
 
 	// Save secret but don't enable yet
-	_, err = dao.Users.Ctx(ctx).Where("id", userId).Data(g.Map{
-		"two_factor_secret":  key.Secret(),
-		"two_factor_enabled": false,
+	_, err = dao.Users.Ctx(ctx).Where(dao.Users.Columns().Id, userId).Data(g.Map{
+		dao.Users.Columns().TwoFactorSecret:  key.Secret(),
+		dao.Users.Columns().TwoFactorEnabled: false,
 	}).Update()
 	if err != nil {
 		return nil, err
@@ -263,7 +267,7 @@ func (s *sAuth) Enable2FA(ctx context.Context, code string) (err error) {
 	userId := utils.RequireUserId(ctx)
 
 	var user *entity.Users
-	err = dao.Users.Ctx(ctx).Where("id", userId).Scan(&user)
+	err = dao.Users.Ctx(ctx).Where(dao.Users.Columns().Id, userId).Scan(&user)
 	if err != nil {
 		return err
 	}
@@ -277,8 +281,8 @@ func (s *sAuth) Enable2FA(ctx context.Context, code string) (err error) {
 		return gerror.New("invalid 2FA code")
 	}
 
-	_, err = dao.Users.Ctx(ctx).Where("id", userId).Data(g.Map{
-		"two_factor_enabled": true,
+	_, err = dao.Users.Ctx(ctx).Where(dao.Users.Columns().Id, userId).Data(g.Map{
+		dao.Users.Columns().TwoFactorEnabled: true,
 	}).Update()
 	return
 }
@@ -287,7 +291,7 @@ func (s *sAuth) Disable2FA(ctx context.Context, code string, password string) (e
 	userId := utils.RequireUserId(ctx)
 
 	var user *entity.Users
-	err = dao.Users.Ctx(ctx).Where("id", userId).Scan(&user)
+	err = dao.Users.Ctx(ctx).Where(dao.Users.Columns().Id, userId).Scan(&user)
 	if err != nil {
 		return err
 	}
@@ -304,9 +308,9 @@ func (s *sAuth) Disable2FA(ctx context.Context, code string, password string) (e
 		return gerror.New("invalid 2FA code")
 	}
 
-	_, err = dao.Users.Ctx(ctx).Where("id", userId).Data(g.Map{
-		"two_factor_enabled": false,
-		"two_factor_secret":  nil,
+	_, err = dao.Users.Ctx(ctx).Where(dao.Users.Columns().Id, userId).Data(g.Map{
+		dao.Users.Columns().TwoFactorEnabled: false,
+		dao.Users.Columns().TwoFactorSecret:  nil,
 	}).Update()
 	return
 }
@@ -466,4 +470,59 @@ func verifyTurnstile(ctx context.Context, token string) bool {
 
 	success, _ := result["success"].(bool)
 	return success
+}
+
+func (s *sAuth) UpdatePassword(ctx context.Context, password, newPassword, confirmPassword string) error {
+	userId := utils.RequireUserId(ctx)
+
+	if newPassword == "" {
+		return gerror.New("new password is required")
+	}
+
+	if newPassword != confirmPassword {
+		return gerror.New("new passwords do not match")
+	}
+
+	if len(newPassword) < 8 {
+		return gerror.New("password must be at least 8 characters")
+	}
+
+	return g.DB().Transaction(ctx, func(ctx context.Context, dbTx gdb.TX) error {
+		var user *entity.Users
+		err := dbTx.Model(dao.Users.Table()).
+			Where(dao.Users.Columns().Id, userId).
+			Scan(&user)
+		if err != nil {
+			return gerror.Wrap(err, "failed to get user")
+		}
+		if user == nil {
+			return gerror.New("user not found")
+		}
+
+		if password != "" {
+			if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+				return gerror.New("invalid current password")
+			}
+		} else {
+			return gerror.New("current password is required")
+		}
+
+		hashedNewPassword := sha256.Sum256([]byte(newPassword))
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(hex.EncodeToString(hashedNewPassword[:])), bcrypt.DefaultCost)
+		if err != nil {
+			return gerror.Wrap(err, "failed to hash password")
+		}
+
+		_, err = dbTx.Model(dao.Users.Table()).
+			Where(dao.Users.Columns().Id, userId).
+			Data(g.Map{
+				dao.Users.Columns().Password: string(hashedPassword),
+			}).
+			Update()
+		if err != nil {
+			return gerror.Wrap(err, "failed to update password")
+		}
+
+		return nil
+	})
 }

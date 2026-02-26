@@ -51,16 +51,6 @@ var (
 				)
 			})
 
-			// Auth routes (public, with ALE using Bootstrap Key)
-			// ALE middleware is optional - requests without ALE headers pass through
-			s.Group("/", func(group *ghttp.RouterGroup) {
-				group.Middleware(middleware.ALEResponseMiddleware)
-				group.Middleware(middleware.ALEMiddleware(middleware.ALEModeBootstrap))
-				group.Bind(
-					auth.NewV1(),
-				)
-			})
-
 			// WebSocket route (special handling, no MiddlewareHandlerResponse)
 			// Note: Route is /ws because Caddy's handle_path /api/* strips the /api prefix
 			s.BindHandler("/v1/ws", ws.Handler)
@@ -71,6 +61,7 @@ var (
 				group.Middleware(middleware.ALEMiddleware(middleware.ALEModeSession))
 				group.Middleware(middleware.AuthMiddleware)
 				group.Bind(
+					auth.NewV1(),
 					user.NewV1(),
 					account.NewV1(),
 					transaction.NewV1(),

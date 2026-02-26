@@ -16,7 +16,7 @@ type (
 	ITask interface {
 		// ListTasks returns a list of tasks for the current user
 		ListTasks(ctx context.Context, in model.TaskQueryInput) (out []model.TaskOutput[any, any], total int, err error)
-		// GetTask returns a single task by ID
+		// GetTask returns a single task by ID with caching.
 		GetTask(ctx context.Context, id uuid.UUID) (out *model.TaskOutput[any, any], err error)
 		// CreateTask creates a new task and publishes it to the queue
 		CreateTask(ctx context.Context, in model.TaskCreateInput[any]) (out *model.TaskOutput[any, any], err error)
