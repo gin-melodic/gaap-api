@@ -37,24 +37,34 @@ func ALEMiddleware(mode ALEMode) func(r *ghttp.Request) {
 	return func(r *ghttp.Request) {
 		ctx := r.Context()
 
+		// Debug: log mode and path
+		g.Log().Debugf(ctx, "ALE Middleware: mode=%v, path=%s", mode, r.URL.Path)
+
 		// Skip ALE for non-POST requests (GET, OPTIONS, etc.)
 		if r.Method != "POST" && r.Method != "PUT" && r.Method != "PATCH" && r.Method != "DELETE" {
 			r.Middleware.Next()
 			return
 		}
 
-		// Skip Session mode validation for public auth routes
-		// These routes need Bootstrap key for decryption, but not Session key for user validation
-		if mode == ALEModeSession {
-			publicAuthPaths := map[string]bool{
-				"/v1/auth/login":         true,
-				"/v1/auth/register":      true,
-				"/v1/auth/refresh-token": true,
-				"/v1/auth/logout":        true,
-			}
-			if publicAuthPaths[r.URL.Path] {
-				// For public routes, use Bootstrap key for decryption instead of Session key
-				mode = ALEModeBootstrap
+		// Determine actual mode based on path
+		// Public auth paths use bootstrap key, all others use session key
+		actualMode := mode
+		publicAuthPaths := map[string]bool{
+			"/v1/auth/login":         true,
+			"/v1/auth/register":      true,
+			"/v1/auth/refresh-token": true,
+			"/v1/auth/logout":        true,
+		}
+		if publicAuthPaths[r.URL.Path] {
+			actualMode = ALEModeBootstrap
+		}
+
+		// Check if this is a session mode request without auth header
+		if actualMode == ALEModeSession {
+			userId := getUserIdFromAuthHeader(r)
+			if userId == "" {
+				// Fall back to bootstrap if no auth header for session mode
+				actualMode = ALEModeBootstrap
 			}
 		}
 
@@ -120,7 +130,7 @@ func ALEMiddleware(mode ALEMode) func(r *ghttp.Request) {
 
 		// Get the appropriate key
 		var hexKey string
-		if mode == ALEModeBootstrap {
+		if actualMode == ALEModeBootstrap {
 			hexKey, err = ale.GetBootstrapKey()
 			if err != nil {
 				g.Log().Errorf(ctx, "Failed to get bootstrap key: %v", err)
@@ -160,9 +170,10 @@ func ALEMiddleware(mode ALEMode) func(r *ghttp.Request) {
 		ciphertext := encryptedBody[crypto.NonceSize:]
 
 		// Verify signature
+		g.Log().Debugf(ctx, "ALE Debug: timestamp=%s, nonce=%s, signature=%s, hexKey=%s", timestamp, nonce, signature, hexKey)
 		valid, err := ale.VerifySignature(iv, ciphertext, timestamp, nonce, signature, hexKey)
 		if err != nil || !valid {
-			g.Log().Warningf(ctx, "ALE signature verification failed")
+			g.Log().Warningf(ctx, "ALE signature verification failed: err=%v, valid=%v", err, valid)
 			r.Response.WriteJsonExit(g.Map{
 				"code":    403,
 				"message": "Invalid signature",

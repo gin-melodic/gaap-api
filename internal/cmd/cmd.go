@@ -58,8 +58,8 @@ var (
 			// Protected routes (authentication required, with ALE using Session Key)
 			s.Group("/", func(group *ghttp.RouterGroup) {
 				group.Middleware(middleware.ALEResponseMiddleware)
+				group.Middleware(middleware.AuthMiddleware) // AuthMiddleware must run BEFORE ALEMiddleware
 				group.Middleware(middleware.ALEMiddleware(middleware.ALEModeSession))
-				group.Middleware(middleware.AuthMiddleware)
 				group.Bind(
 					auth.NewV1(),
 					user.NewV1(),
