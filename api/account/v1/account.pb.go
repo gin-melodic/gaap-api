@@ -41,6 +41,7 @@ type Account struct {
 	CreatedAt        *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt        *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	OpeningVoucherId string                 `protobuf:"bytes,13,opt,name=opening_voucher_id,json=openingVoucherId,proto3" json:"opening_voucher_id,omitempty"`
+	EquityAccountId  *string                `protobuf:"bytes,14,opt,name=equity_account_id,json=equityAccountId,proto3,oneof" json:"equity_account_id,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -162,6 +163,13 @@ func (x *Account) GetUpdatedAt() *timestamppb.Timestamp {
 func (x *Account) GetOpeningVoucherId() string {
 	if x != nil {
 		return x.OpeningVoucherId
+	}
+	return ""
+}
+
+func (x *Account) GetEquityAccountId() string {
+	if x != nil && x.EquityAccountId != nil {
+		return *x.EquityAccountId
 	}
 	return ""
 }

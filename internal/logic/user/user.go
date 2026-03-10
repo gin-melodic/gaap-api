@@ -61,6 +61,13 @@ func (s *sUser) loadUserProfileFromDB(ctx context.Context, userId string) (*mode
 func (s *sUser) UpdateUserProfile(ctx context.Context, in model.UserUpdateInput) (out *model.UserProfile, err error) {
 	userId := utils.RequireUserId(ctx)
 
+	if in.MainCurrency != "" {
+		_, err = dao.Currencies.Ctx(ctx).Data(entity.Currencies{Code: in.MainCurrency}).InsertIgnore()
+		if err != nil {
+			return nil, gerror.Wrap(err, "failed to insert currency")
+		}
+	}
+
 	_, err = dao.Users.Ctx(ctx).Data(in).Where(dao.Users.Columns().Id, userId).Update()
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to update user profile")

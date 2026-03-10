@@ -46,6 +46,7 @@ message Account {
   google.protobuf.Timestamp created_at = 11;
   google.protobuf.Timestamp updated_at = 12;
   string opening_voucher_id = 13;
+  optional string equity_account_id = 14;
 }
 
 message AccountInput {

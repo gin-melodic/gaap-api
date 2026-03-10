@@ -74,6 +74,10 @@ func entityToProto(e *entity.Accounts) *v1.Account {
 		defaultChildId := e.DefaultChildId.String()
 		account.DefaultChildId = &defaultChildId
 	}
+	if e.EquityAccountId != uuid.Nil {
+		eqId := e.EquityAccountId.String()
+		account.EquityAccountId = &eqId
+	}
 	if e.CreatedAt != nil {
 		account.CreatedAt = timestamppb.New(e.CreatedAt.Time)
 	}

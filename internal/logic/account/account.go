@@ -115,7 +115,7 @@ func (s *sAccount) CreateAccount(ctx context.Context, in model.AccountCreateInpu
 		// If initial balance is non-zero, create opening balance transaction
 		if (initialUnits != 0 || initialNanos != 0) && (in.Type == utils.AccountTypeAsset || in.Type == utils.AccountTypeLiability) {
 			// Get or create equity account for this currency
-			equityAccountId, err := s.getOrCreateOpeningBalanceEquityAccountInTx(ctx, dbTx, in.CurrencyCode, in.UserId)
+			equityAccountId, err := s.getOrCreateOpeningBalanceEquityAccountInTx(ctx, dbTx, in.CurrencyCode, in.UserId, newId)
 			if err != nil {
 				return gerror.Wrap(err, "failed to get/create equity account")
 			}
@@ -243,7 +243,7 @@ func (s *sAccount) UpdateAccount(ctx context.Context, id uuid.UUID, in model.Acc
 		}
 
 		// Get opening equity account
-		equityAccountId, err := s.getOrCreateOpeningBalanceEquityAccountInTx(ctx, dbTx, existing.CurrencyCode, existing.UserId)
+		equityAccountId, err := s.getOrCreateOpeningBalanceEquityAccountInTx(ctx, dbTx, existing.CurrencyCode, existing.UserId, id)
 		if err != nil {
 			return gerror.Wrap(err, "failed to get/create opening equity account")
 		}
@@ -331,6 +331,8 @@ func (s *sAccount) DeleteAccount(ctx context.Context, id uuid.UUID, migrationTar
 			dao.Transactions.Columns().FromAccountId,
 			dao.Transactions.Columns().ToAccountId),
 			accountIds, accountIds).
+		// Exclude note containing "Opening Balance"
+		WhereNotLike(dao.Transactions.Columns().Note, "%Opening Balance%").
 		Count()
 	if err != nil {
 		return "", gerror.Wrap(err, "failed to get transactions count")
@@ -416,16 +418,13 @@ func (s *sAccount) GetAccountTransactionCount(ctx context.Context, id uuid.UUID)
 }
 
 // getOrCreateOpeningBalanceEquityAccountInTx gets or creates an opening balance equity account within a transaction.
-func (s *sAccount) getOrCreateOpeningBalanceEquityAccountInTx(ctx context.Context, dbTx gdb.TX, currency string, userId uuid.UUID) (uuid.UUID, error) {
-	// Look for existing equity account for this currency and user
-	equityAccountName := "Opening Balance - " + currency + " - " + userId.String()
-
+// It uses equity_account_id FK for efficient lookup and sets bidirectional linking.
+func (s *sAccount) getOrCreateOpeningBalanceEquityAccountInTx(ctx context.Context, dbTx gdb.TX, currency string, userId uuid.UUID, sourceAccountId uuid.UUID) (uuid.UUID, error) {
+	// Look for existing equity account linked via equity_account_id
 	var existing entity.Accounts
 	err := dbTx.Model(dao.Accounts.Table()).
-		Where(dao.Accounts.Columns().UserId, userId).
+		Where(dao.Accounts.Columns().EquityAccountId, sourceAccountId).
 		Where(dao.Accounts.Columns().Type, utils.AccountTypeEquity).
-		Where(dao.Accounts.Columns().CurrencyCode, currency).
-		Where(dao.Accounts.Columns().Name, equityAccountName).
 		Where(dao.Accounts.Columns().DeletedAt + " IS NULL").
 		Scan(&existing)
 
@@ -446,16 +445,19 @@ func (s *sAccount) getOrCreateOpeningBalanceEquityAccountInTx(ctx context.Contex
 		return uuid.Nil, gerror.Wrap(err, "failed to generate UUID")
 	}
 
+	equityAccountName := "Opening Balance - " + currency + " - " + userId.String()
+
 	equityAccount := entity.Accounts{
-		Id:           newId,
-		UserId:       userId,
-		Name:         equityAccountName,
-		Type:         utils.AccountTypeEquity,
-		IsGroup:      false,
-		BalanceUnits: 0,
-		BalanceNanos: 0,
-		CurrencyCode: currency,
-		Date:         gtime.Now(),
+		Id:              newId,
+		UserId:          userId,
+		Name:            equityAccountName,
+		Type:            utils.AccountTypeEquity,
+		IsGroup:         false,
+		BalanceUnits:    0,
+		BalanceNanos:    0,
+		CurrencyCode:    currency,
+		Date:            gtime.Now(),
+		EquityAccountId: sourceAccountId, // Link equity -> source
 	}
 
 	_, err = dbTx.Model(dao.Accounts.Table()).
@@ -468,6 +470,16 @@ func (s *sAccount) getOrCreateOpeningBalanceEquityAccountInTx(ctx context.Contex
 	if err != nil {
 		g.Log().Errorf(ctx, "Failed to insert equity account: %v", err)
 		return uuid.Nil, gerror.Wrap(err, "failed to create equity account")
+	}
+
+	// Set bidirectional link: source -> equity
+	_, err = dbTx.Model(dao.Accounts.Table()).
+		Where(dao.Accounts.Columns().Id, sourceAccountId).
+		Data(g.Map{dao.Accounts.Columns().EquityAccountId: newId}).
+		Update()
+	if err != nil {
+		g.Log().Errorf(ctx, "Failed to link source account to equity account: %v", err)
+		return uuid.Nil, gerror.Wrap(err, "failed to link source account to equity account")
 	}
 
 	return newId, nil

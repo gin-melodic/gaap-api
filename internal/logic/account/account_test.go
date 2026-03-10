@@ -25,7 +25,7 @@ import (
 var accountColumns = []string{
 	"id", "user_id", "parent_id", "name", "type", "is_group",
 	"currency_code", "balance_units", "balance_nanos", "balance_decimal",
-	"default_child_id", "date", "number", "remarks",
+	"default_child_id", "equity_account_id", "date", "number", "remarks",
 	"created_at", "updated_at", "deleted_at",
 }
 
@@ -64,7 +64,7 @@ func Test_Account_GetAccount(t *testing.T) {
 		rows := sqlmock.NewRows(accountColumns).AddRow(
 			accountId.String(), userId.String(), nil, "Checking Account", AccountTypeAsset, false,
 			"USD", int64(1000), 500000000, 1000.5, // 1000 units + 0.5 nanos = 1000.50
-			nil, "2023-01-01", "CHK-001", "Main checking",
+			nil, nil, "2023-01-01", "CHK-001", "Main checking",
 			"2023-01-01", "2023-01-01", nil,
 		)
 
@@ -134,7 +134,7 @@ func Test_Account_GetAccount_WrongUser(t *testing.T) {
 		rows := sqlmock.NewRows(accountColumns).AddRow(
 			accountId.String(), ownerUserId.String(), nil, "Private Account", AccountTypeAsset, false,
 			"USD", int64(50000), 0, 50000.0,
-			nil, "2023-01-01", "", "",
+			nil, nil, "2023-01-01", "", "",
 			"2023-01-01", "2023-01-01", nil,
 		)
 
