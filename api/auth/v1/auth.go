@@ -13,6 +13,7 @@ import (
 // The wrapper types embed the original Protobuf types with a "Gf" prefix
 // =============================================================================
 
+
 // GfLoginReq is the GoFrame-compatible request wrapper for Login
 type GfLoginReq struct {
 	g.Meta `path:"/v1/auth/login" method:"POST" tags:"auth" summary:"User login"`
@@ -21,6 +22,7 @@ type GfLoginReq struct {
 
 // GfLoginRes is the GoFrame-compatible response wrapper for Login
 type GfLoginRes = LoginRes
+
 
 // GfRegisterReq is the GoFrame-compatible request wrapper for Register
 type GfRegisterReq struct {
@@ -31,6 +33,7 @@ type GfRegisterReq struct {
 // GfRegisterRes is the GoFrame-compatible response wrapper for Register
 type GfRegisterRes = RegisterRes
 
+
 // GfLogoutReq is the GoFrame-compatible request wrapper for Logout
 type GfLogoutReq struct {
 	g.Meta `path:"/v1/auth/logout" method:"POST" tags:"auth" summary:"User logout"`
@@ -39,6 +42,7 @@ type GfLogoutReq struct {
 
 // GfLogoutRes is the GoFrame-compatible response wrapper for Logout
 type GfLogoutRes = LogoutRes
+
 
 // GfRefreshTokenReq is the GoFrame-compatible request wrapper for RefreshToken
 type GfRefreshTokenReq struct {
@@ -49,6 +53,7 @@ type GfRefreshTokenReq struct {
 // GfRefreshTokenRes is the GoFrame-compatible response wrapper for RefreshToken
 type GfRefreshTokenRes = RefreshTokenRes
 
+
 // GfGenerate2FAReq is the GoFrame-compatible request wrapper for Generate2FA
 type GfGenerate2FAReq struct {
 	g.Meta `path:"/v1/auth/generate2-f-a" method:"POST" tags:"auth" summary:"Generate 2FA secret"`
@@ -57,6 +62,7 @@ type GfGenerate2FAReq struct {
 
 // GfGenerate2FARes is the GoFrame-compatible response wrapper for Generate2FA
 type GfGenerate2FARes = Generate2FARes
+
 
 // GfEnable2FAReq is the GoFrame-compatible request wrapper for Enable2FA
 type GfEnable2FAReq struct {
@@ -67,6 +73,7 @@ type GfEnable2FAReq struct {
 // GfEnable2FARes is the GoFrame-compatible response wrapper for Enable2FA
 type GfEnable2FARes = Enable2FARes
 
+
 // GfDisable2FAReq is the GoFrame-compatible request wrapper for Disable2FA
 type GfDisable2FAReq struct {
 	g.Meta `path:"/v1/auth/disable2-f-a" method:"POST" tags:"auth" summary:"Disable 2FA"`
@@ -76,6 +83,7 @@ type GfDisable2FAReq struct {
 // GfDisable2FARes is the GoFrame-compatible response wrapper for Disable2FA
 type GfDisable2FARes = Disable2FARes
 
+
 // GfUpdatePasswordReq is the GoFrame-compatible request wrapper for UpdatePassword
 type GfUpdatePasswordReq struct {
 	g.Meta `path:"/v1/auth/update-password" method:"POST" tags:"auth" summary:"Update password"`
@@ -84,3 +92,15 @@ type GfUpdatePasswordReq struct {
 
 // GfUpdatePasswordRes is the GoFrame-compatible response wrapper for UpdatePassword
 type GfUpdatePasswordRes = UpdatePasswordRes
+
+
+// GfGetCurrencyListReq is the GoFrame-compatible request wrapper for GetCurrencyList
+type GfGetCurrencyListReq struct {
+	g.Meta `path:"/v1/auth/get-currency-list" method:"POST" tags:"auth" summary:"Get currency list"`
+	GetCurrencyListReq
+}
+
+// GfGetCurrencyListRes is the GoFrame-compatible response wrapper for GetCurrencyList
+type GfGetCurrencyListRes = GetCurrencyListRes
+
+

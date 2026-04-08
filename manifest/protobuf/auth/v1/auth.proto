@@ -31,6 +31,9 @@ service AuthService {
   
   // Update password
   rpc UpdatePassword(UpdatePasswordReq) returns (UpdatePasswordRes);
+  
+  // Get currency list
+  rpc GetCurrencyList(GetCurrencyListReq) returns (GetCurrencyListRes);
 }
 
 message UpdatePasswordReq {
@@ -67,6 +70,7 @@ message RegisterReq {
   string password = 2;
   string nickname = 3;
   string cf_turnstile_response = 4;
+  string main_currency = 5;
 }
 
 message RegisterRes {
@@ -117,5 +121,16 @@ message Disable2FAReq {
 }
 
 message Disable2FARes {
+  base.BaseResponse base = 255;
+}
+
+message CurrencyInfo {
+  string code = 1;
+}
+
+message GetCurrencyListReq {}
+
+message GetCurrencyListRes {
+  repeated CurrencyInfo currencies = 1;
   base.BaseResponse base = 255;
 }

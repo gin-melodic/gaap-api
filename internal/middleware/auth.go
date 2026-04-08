@@ -35,9 +35,10 @@ func AuthMiddleware(r *ghttp.Request) {
 	// Skip auth for public auth routes (login, register, refresh-token, logout)
 	publicPaths := map[string]bool{
 		"/v1/auth/login":         true,
-		"/v1/auth/register":      true,
-		"/v1/auth/refresh-token": true,
-		"/v1/auth/logout":        true,
+		"/v1/auth/register":            true,
+		"/v1/auth/refresh-token":       true,
+		"/v1/auth/logout":              true,
+		"/v1/auth/get-currency-list":   true,
 	}
 	if publicPaths[r.URL.Path] {
 		r.Middleware.Next()

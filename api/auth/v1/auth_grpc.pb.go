@@ -20,14 +20,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AuthService_Login_FullMethodName          = "/auth.v1.AuthService/Login"
-	AuthService_Register_FullMethodName       = "/auth.v1.AuthService/Register"
-	AuthService_Logout_FullMethodName         = "/auth.v1.AuthService/Logout"
-	AuthService_RefreshToken_FullMethodName   = "/auth.v1.AuthService/RefreshToken"
-	AuthService_Generate2FA_FullMethodName    = "/auth.v1.AuthService/Generate2FA"
-	AuthService_Enable2FA_FullMethodName      = "/auth.v1.AuthService/Enable2FA"
-	AuthService_Disable2FA_FullMethodName     = "/auth.v1.AuthService/Disable2FA"
-	AuthService_UpdatePassword_FullMethodName = "/auth.v1.AuthService/UpdatePassword"
+	AuthService_Login_FullMethodName           = "/auth.v1.AuthService/Login"
+	AuthService_Register_FullMethodName        = "/auth.v1.AuthService/Register"
+	AuthService_Logout_FullMethodName          = "/auth.v1.AuthService/Logout"
+	AuthService_RefreshToken_FullMethodName    = "/auth.v1.AuthService/RefreshToken"
+	AuthService_Generate2FA_FullMethodName     = "/auth.v1.AuthService/Generate2FA"
+	AuthService_Enable2FA_FullMethodName       = "/auth.v1.AuthService/Enable2FA"
+	AuthService_Disable2FA_FullMethodName      = "/auth.v1.AuthService/Disable2FA"
+	AuthService_UpdatePassword_FullMethodName  = "/auth.v1.AuthService/UpdatePassword"
+	AuthService_GetCurrencyList_FullMethodName = "/auth.v1.AuthService/GetCurrencyList"
 )
 
 // AuthServiceClient is the client API for AuthService service.
@@ -50,6 +51,8 @@ type AuthServiceClient interface {
 	Disable2FA(ctx context.Context, in *Disable2FAReq, opts ...grpc.CallOption) (*Disable2FARes, error)
 	// Update password
 	UpdatePassword(ctx context.Context, in *UpdatePasswordReq, opts ...grpc.CallOption) (*UpdatePasswordRes, error)
+	// Get currency list
+	GetCurrencyList(ctx context.Context, in *GetCurrencyListReq, opts ...grpc.CallOption) (*GetCurrencyListRes, error)
 }
 
 type authServiceClient struct {
@@ -140,6 +143,16 @@ func (c *authServiceClient) UpdatePassword(ctx context.Context, in *UpdatePasswo
 	return out, nil
 }
 
+func (c *authServiceClient) GetCurrencyList(ctx context.Context, in *GetCurrencyListReq, opts ...grpc.CallOption) (*GetCurrencyListRes, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetCurrencyListRes)
+	err := c.cc.Invoke(ctx, AuthService_GetCurrencyList_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AuthServiceServer is the server API for AuthService service.
 // All implementations must embed UnimplementedAuthServiceServer
 // for forward compatibility.
@@ -160,6 +173,8 @@ type AuthServiceServer interface {
 	Disable2FA(context.Context, *Disable2FAReq) (*Disable2FARes, error)
 	// Update password
 	UpdatePassword(context.Context, *UpdatePasswordReq) (*UpdatePasswordRes, error)
+	// Get currency list
+	GetCurrencyList(context.Context, *GetCurrencyListReq) (*GetCurrencyListRes, error)
 	mustEmbedUnimplementedAuthServiceServer()
 }
 
@@ -193,6 +208,9 @@ func (UnimplementedAuthServiceServer) Disable2FA(context.Context, *Disable2FAReq
 }
 func (UnimplementedAuthServiceServer) UpdatePassword(context.Context, *UpdatePasswordReq) (*UpdatePasswordRes, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdatePassword not implemented")
+}
+func (UnimplementedAuthServiceServer) GetCurrencyList(context.Context, *GetCurrencyListReq) (*GetCurrencyListRes, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetCurrencyList not implemented")
 }
 func (UnimplementedAuthServiceServer) mustEmbedUnimplementedAuthServiceServer() {}
 func (UnimplementedAuthServiceServer) testEmbeddedByValue()                     {}
@@ -359,6 +377,24 @@ func _AuthService_UpdatePassword_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthService_GetCurrencyList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCurrencyListReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).GetCurrencyList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_GetCurrencyList_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).GetCurrencyList(ctx, req.(*GetCurrencyListReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AuthService_ServiceDesc is the grpc.ServiceDesc for AuthService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -397,6 +433,10 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdatePassword",
 			Handler:    _AuthService_UpdatePassword_Handler,
+		},
+		{
+			MethodName: "GetCurrencyList",
+			Handler:    _AuthService_GetCurrencyList_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

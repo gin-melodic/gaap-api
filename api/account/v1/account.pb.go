@@ -965,7 +965,7 @@ var File_account_v1_account_proto protoreflect.FileDescriptor
 const file_account_v1_account_proto_rawDesc = "" +
 	"\n" +
 	"\x18account/v1/account.proto\x12\n" +
-	"account.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x0fbase/base.proto\"\xf4\x03\n" +
+	"account.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x0fbase/base.proto\"\xbb\x04\n" +
 	"\aAccount\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12 \n" +
 	"\tparent_id\x18\x02 \x01(\tH\x00R\bparentId\x88\x01\x01\x12\x12\n" +
@@ -982,10 +982,12 @@ const file_account_v1_account_proto_rawDesc = "" +
 	"created_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
 	"updated_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12,\n" +
-	"\x12opening_voucher_id\x18\r \x01(\tR\x10openingVoucherIdB\f\n" +
+	"\x12opening_voucher_id\x18\r \x01(\tR\x10openingVoucherId\x12/\n" +
+	"\x11equity_account_id\x18\x0e \x01(\tH\x02R\x0fequityAccountId\x88\x01\x01B\f\n" +
 	"\n" +
 	"_parent_idB\x13\n" +
-	"\x11_default_child_id\"\xe6\x02\n" +
+	"\x11_default_child_idB\x14\n" +
+	"\x12_equity_account_id\"\xe6\x02\n" +
 	"\fAccountInput\x12 \n" +
 	"\tparent_id\x18\x01 \x01(\tH\x00R\bparentId\x88\x01\x01\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12%\n" +

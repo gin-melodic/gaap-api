@@ -322,6 +322,7 @@ type RegisterReq struct {
 	Password            string                 `protobuf:"bytes,2,opt,name=password,proto3" json:"password,omitempty"`
 	Nickname            string                 `protobuf:"bytes,3,opt,name=nickname,proto3" json:"nickname,omitempty"`
 	CfTurnstileResponse string                 `protobuf:"bytes,4,opt,name=cf_turnstile_response,json=cfTurnstileResponse,proto3" json:"cf_turnstile_response,omitempty"`
+	MainCurrency        string                 `protobuf:"bytes,5,opt,name=main_currency,json=mainCurrency,proto3" json:"main_currency,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -380,6 +381,13 @@ func (x *RegisterReq) GetNickname() string {
 func (x *RegisterReq) GetCfTurnstileResponse() string {
 	if x != nil {
 		return x.CfTurnstileResponse
+	}
+	return ""
+}
+
+func (x *RegisterReq) GetMainCurrency() string {
+	if x != nil {
+		return x.MainCurrency
 	}
 	return ""
 }
@@ -952,6 +960,138 @@ func (x *Disable2FARes) GetBase() *base.BaseResponse {
 	return nil
 }
 
+type CurrencyInfo struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          string                 `protobuf:"bytes,1,opt,name=code,proto3" json:"code,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CurrencyInfo) Reset() {
+	*x = CurrencyInfo{}
+	mi := &file_auth_v1_auth_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CurrencyInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CurrencyInfo) ProtoMessage() {}
+
+func (x *CurrencyInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_auth_v1_auth_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CurrencyInfo.ProtoReflect.Descriptor instead.
+func (*CurrencyInfo) Descriptor() ([]byte, []int) {
+	return file_auth_v1_auth_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *CurrencyInfo) GetCode() string {
+	if x != nil {
+		return x.Code
+	}
+	return ""
+}
+
+type GetCurrencyListReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetCurrencyListReq) Reset() {
+	*x = GetCurrencyListReq{}
+	mi := &file_auth_v1_auth_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetCurrencyListReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetCurrencyListReq) ProtoMessage() {}
+
+func (x *GetCurrencyListReq) ProtoReflect() protoreflect.Message {
+	mi := &file_auth_v1_auth_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetCurrencyListReq.ProtoReflect.Descriptor instead.
+func (*GetCurrencyListReq) Descriptor() ([]byte, []int) {
+	return file_auth_v1_auth_proto_rawDescGZIP(), []int{19}
+}
+
+type GetCurrencyListRes struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Currencies    []*CurrencyInfo        `protobuf:"bytes,1,rep,name=currencies,proto3" json:"currencies,omitempty"`
+	Base          *base.BaseResponse     `protobuf:"bytes,255,opt,name=base,proto3" json:"base,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetCurrencyListRes) Reset() {
+	*x = GetCurrencyListRes{}
+	mi := &file_auth_v1_auth_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetCurrencyListRes) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetCurrencyListRes) ProtoMessage() {}
+
+func (x *GetCurrencyListRes) ProtoReflect() protoreflect.Message {
+	mi := &file_auth_v1_auth_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetCurrencyListRes.ProtoReflect.Descriptor instead.
+func (*GetCurrencyListRes) Descriptor() ([]byte, []int) {
+	return file_auth_v1_auth_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *GetCurrencyListRes) GetCurrencies() []*CurrencyInfo {
+	if x != nil {
+		return x.Currencies
+	}
+	return nil
+}
+
+func (x *GetCurrencyListRes) GetBase() *base.BaseResponse {
+	if x != nil {
+		return x.Base
+	}
+	return nil
+}
+
 var File_auth_v1_auth_proto protoreflect.FileDescriptor
 
 const file_auth_v1_auth_proto_rawDesc = "" +
@@ -976,12 +1116,13 @@ const file_auth_v1_auth_proto_rawDesc = "" +
 	"\x15cf_turnstile_response\x18\x04 \x01(\tR\x13cfTurnstileResponse\"^\n" +
 	"\bLoginRes\x12)\n" +
 	"\x04auth\x18\x01 \x01(\v2\x15.auth.v1.AuthResponseR\x04auth\x12'\n" +
-	"\x04base\x18\xff\x01 \x01(\v2\x12.base.BaseResponseR\x04base\"\x8f\x01\n" +
+	"\x04base\x18\xff\x01 \x01(\v2\x12.base.BaseResponseR\x04base\"\xb4\x01\n" +
 	"\vRegisterReq\x12\x14\n" +
 	"\x05email\x18\x01 \x01(\tR\x05email\x12\x1a\n" +
 	"\bpassword\x18\x02 \x01(\tR\bpassword\x12\x1a\n" +
 	"\bnickname\x18\x03 \x01(\tR\bnickname\x122\n" +
-	"\x15cf_turnstile_response\x18\x04 \x01(\tR\x13cfTurnstileResponse\"a\n" +
+	"\x15cf_turnstile_response\x18\x04 \x01(\tR\x13cfTurnstileResponse\x12#\n" +
+	"\rmain_currency\x18\x05 \x01(\tR\fmainCurrency\"a\n" +
 	"\vRegisterRes\x12)\n" +
 	"\x04auth\x18\x01 \x01(\v2\x15.auth.v1.AuthResponseR\x04auth\x12'\n" +
 	"\x04base\x18\xff\x01 \x01(\v2\x12.base.BaseResponseR\x04base\"\v\n" +
@@ -1011,7 +1152,15 @@ const file_auth_v1_auth_proto_rawDesc = "" +
 	"\x04code\x18\x01 \x01(\tR\x04code\x12\x1a\n" +
 	"\bpassword\x18\x02 \x01(\tR\bpassword\"8\n" +
 	"\rDisable2FARes\x12'\n" +
-	"\x04base\x18\xff\x01 \x01(\v2\x12.base.BaseResponseR\x04base2\xee\x03\n" +
+	"\x04base\x18\xff\x01 \x01(\v2\x12.base.BaseResponseR\x04base\"\"\n" +
+	"\fCurrencyInfo\x12\x12\n" +
+	"\x04code\x18\x01 \x01(\tR\x04code\"\x14\n" +
+	"\x12GetCurrencyListReq\"t\n" +
+	"\x12GetCurrencyListRes\x125\n" +
+	"\n" +
+	"currencies\x18\x01 \x03(\v2\x15.auth.v1.CurrencyInfoR\n" +
+	"currencies\x12'\n" +
+	"\x04base\x18\xff\x01 \x01(\v2\x12.base.BaseResponseR\x04base2\xbb\x04\n" +
 	"\vAuthService\x12-\n" +
 	"\x05Login\x12\x11.auth.v1.LoginReq\x1a\x11.auth.v1.LoginRes\x126\n" +
 	"\bRegister\x12\x14.auth.v1.RegisterReq\x1a\x14.auth.v1.RegisterRes\x120\n" +
@@ -1021,7 +1170,8 @@ const file_auth_v1_auth_proto_rawDesc = "" +
 	"\tEnable2FA\x12\x15.auth.v1.Enable2FAReq\x1a\x15.auth.v1.Enable2FARes\x12<\n" +
 	"\n" +
 	"Disable2FA\x12\x16.auth.v1.Disable2FAReq\x1a\x16.auth.v1.Disable2FARes\x12H\n" +
-	"\x0eUpdatePassword\x12\x1a.auth.v1.UpdatePasswordReq\x1a\x1a.auth.v1.UpdatePasswordResB\x19Z\x17gaap-api/api/auth/v1;v1b\x06proto3"
+	"\x0eUpdatePassword\x12\x1a.auth.v1.UpdatePasswordReq\x1a\x1a.auth.v1.UpdatePasswordRes\x12K\n" +
+	"\x0fGetCurrencyList\x12\x1b.auth.v1.GetCurrencyListReq\x1a\x1b.auth.v1.GetCurrencyListResB\x19Z\x17gaap-api/api/auth/v1;v1b\x06proto3"
 
 var (
 	file_auth_v1_auth_proto_rawDescOnce sync.Once
@@ -1035,63 +1185,70 @@ func file_auth_v1_auth_proto_rawDescGZIP() []byte {
 	return file_auth_v1_auth_proto_rawDescData
 }
 
-var file_auth_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_auth_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_auth_v1_auth_proto_goTypes = []any{
-	(*UpdatePasswordReq)(nil), // 0: auth.v1.UpdatePasswordReq
-	(*UpdatePasswordRes)(nil), // 1: auth.v1.UpdatePasswordRes
-	(*AuthResponse)(nil),      // 2: auth.v1.AuthResponse
-	(*LoginReq)(nil),          // 3: auth.v1.LoginReq
-	(*LoginRes)(nil),          // 4: auth.v1.LoginRes
-	(*RegisterReq)(nil),       // 5: auth.v1.RegisterReq
-	(*RegisterRes)(nil),       // 6: auth.v1.RegisterRes
-	(*LogoutReq)(nil),         // 7: auth.v1.LogoutReq
-	(*LogoutRes)(nil),         // 8: auth.v1.LogoutRes
-	(*RefreshTokenReq)(nil),   // 9: auth.v1.RefreshTokenReq
-	(*RefreshTokenRes)(nil),   // 10: auth.v1.RefreshTokenRes
-	(*TwoFactorSecret)(nil),   // 11: auth.v1.TwoFactorSecret
-	(*Generate2FAReq)(nil),    // 12: auth.v1.Generate2FAReq
-	(*Generate2FARes)(nil),    // 13: auth.v1.Generate2FARes
-	(*Enable2FAReq)(nil),      // 14: auth.v1.Enable2FAReq
-	(*Enable2FARes)(nil),      // 15: auth.v1.Enable2FARes
-	(*Disable2FAReq)(nil),     // 16: auth.v1.Disable2FAReq
-	(*Disable2FARes)(nil),     // 17: auth.v1.Disable2FARes
-	(*base.BaseResponse)(nil), // 18: base.BaseResponse
-	(*v1.User)(nil),           // 19: user.v1.User
+	(*UpdatePasswordReq)(nil),  // 0: auth.v1.UpdatePasswordReq
+	(*UpdatePasswordRes)(nil),  // 1: auth.v1.UpdatePasswordRes
+	(*AuthResponse)(nil),       // 2: auth.v1.AuthResponse
+	(*LoginReq)(nil),           // 3: auth.v1.LoginReq
+	(*LoginRes)(nil),           // 4: auth.v1.LoginRes
+	(*RegisterReq)(nil),        // 5: auth.v1.RegisterReq
+	(*RegisterRes)(nil),        // 6: auth.v1.RegisterRes
+	(*LogoutReq)(nil),          // 7: auth.v1.LogoutReq
+	(*LogoutRes)(nil),          // 8: auth.v1.LogoutRes
+	(*RefreshTokenReq)(nil),    // 9: auth.v1.RefreshTokenReq
+	(*RefreshTokenRes)(nil),    // 10: auth.v1.RefreshTokenRes
+	(*TwoFactorSecret)(nil),    // 11: auth.v1.TwoFactorSecret
+	(*Generate2FAReq)(nil),     // 12: auth.v1.Generate2FAReq
+	(*Generate2FARes)(nil),     // 13: auth.v1.Generate2FARes
+	(*Enable2FAReq)(nil),       // 14: auth.v1.Enable2FAReq
+	(*Enable2FARes)(nil),       // 15: auth.v1.Enable2FARes
+	(*Disable2FAReq)(nil),      // 16: auth.v1.Disable2FAReq
+	(*Disable2FARes)(nil),      // 17: auth.v1.Disable2FARes
+	(*CurrencyInfo)(nil),       // 18: auth.v1.CurrencyInfo
+	(*GetCurrencyListReq)(nil), // 19: auth.v1.GetCurrencyListReq
+	(*GetCurrencyListRes)(nil), // 20: auth.v1.GetCurrencyListRes
+	(*base.BaseResponse)(nil),  // 21: base.BaseResponse
+	(*v1.User)(nil),            // 22: user.v1.User
 }
 var file_auth_v1_auth_proto_depIdxs = []int32{
-	18, // 0: auth.v1.UpdatePasswordRes.base:type_name -> base.BaseResponse
-	19, // 1: auth.v1.AuthResponse.user:type_name -> user.v1.User
+	21, // 0: auth.v1.UpdatePasswordRes.base:type_name -> base.BaseResponse
+	22, // 1: auth.v1.AuthResponse.user:type_name -> user.v1.User
 	2,  // 2: auth.v1.LoginRes.auth:type_name -> auth.v1.AuthResponse
-	18, // 3: auth.v1.LoginRes.base:type_name -> base.BaseResponse
+	21, // 3: auth.v1.LoginRes.base:type_name -> base.BaseResponse
 	2,  // 4: auth.v1.RegisterRes.auth:type_name -> auth.v1.AuthResponse
-	18, // 5: auth.v1.RegisterRes.base:type_name -> base.BaseResponse
-	18, // 6: auth.v1.LogoutRes.base:type_name -> base.BaseResponse
-	18, // 7: auth.v1.RefreshTokenRes.base:type_name -> base.BaseResponse
+	21, // 5: auth.v1.RegisterRes.base:type_name -> base.BaseResponse
+	21, // 6: auth.v1.LogoutRes.base:type_name -> base.BaseResponse
+	21, // 7: auth.v1.RefreshTokenRes.base:type_name -> base.BaseResponse
 	11, // 8: auth.v1.Generate2FARes.secret:type_name -> auth.v1.TwoFactorSecret
-	18, // 9: auth.v1.Generate2FARes.base:type_name -> base.BaseResponse
-	18, // 10: auth.v1.Enable2FARes.base:type_name -> base.BaseResponse
-	18, // 11: auth.v1.Disable2FARes.base:type_name -> base.BaseResponse
-	3,  // 12: auth.v1.AuthService.Login:input_type -> auth.v1.LoginReq
-	5,  // 13: auth.v1.AuthService.Register:input_type -> auth.v1.RegisterReq
-	7,  // 14: auth.v1.AuthService.Logout:input_type -> auth.v1.LogoutReq
-	9,  // 15: auth.v1.AuthService.RefreshToken:input_type -> auth.v1.RefreshTokenReq
-	12, // 16: auth.v1.AuthService.Generate2FA:input_type -> auth.v1.Generate2FAReq
-	14, // 17: auth.v1.AuthService.Enable2FA:input_type -> auth.v1.Enable2FAReq
-	16, // 18: auth.v1.AuthService.Disable2FA:input_type -> auth.v1.Disable2FAReq
-	0,  // 19: auth.v1.AuthService.UpdatePassword:input_type -> auth.v1.UpdatePasswordReq
-	4,  // 20: auth.v1.AuthService.Login:output_type -> auth.v1.LoginRes
-	6,  // 21: auth.v1.AuthService.Register:output_type -> auth.v1.RegisterRes
-	8,  // 22: auth.v1.AuthService.Logout:output_type -> auth.v1.LogoutRes
-	10, // 23: auth.v1.AuthService.RefreshToken:output_type -> auth.v1.RefreshTokenRes
-	13, // 24: auth.v1.AuthService.Generate2FA:output_type -> auth.v1.Generate2FARes
-	15, // 25: auth.v1.AuthService.Enable2FA:output_type -> auth.v1.Enable2FARes
-	17, // 26: auth.v1.AuthService.Disable2FA:output_type -> auth.v1.Disable2FARes
-	1,  // 27: auth.v1.AuthService.UpdatePassword:output_type -> auth.v1.UpdatePasswordRes
-	20, // [20:28] is the sub-list for method output_type
-	12, // [12:20] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	21, // 9: auth.v1.Generate2FARes.base:type_name -> base.BaseResponse
+	21, // 10: auth.v1.Enable2FARes.base:type_name -> base.BaseResponse
+	21, // 11: auth.v1.Disable2FARes.base:type_name -> base.BaseResponse
+	18, // 12: auth.v1.GetCurrencyListRes.currencies:type_name -> auth.v1.CurrencyInfo
+	21, // 13: auth.v1.GetCurrencyListRes.base:type_name -> base.BaseResponse
+	3,  // 14: auth.v1.AuthService.Login:input_type -> auth.v1.LoginReq
+	5,  // 15: auth.v1.AuthService.Register:input_type -> auth.v1.RegisterReq
+	7,  // 16: auth.v1.AuthService.Logout:input_type -> auth.v1.LogoutReq
+	9,  // 17: auth.v1.AuthService.RefreshToken:input_type -> auth.v1.RefreshTokenReq
+	12, // 18: auth.v1.AuthService.Generate2FA:input_type -> auth.v1.Generate2FAReq
+	14, // 19: auth.v1.AuthService.Enable2FA:input_type -> auth.v1.Enable2FAReq
+	16, // 20: auth.v1.AuthService.Disable2FA:input_type -> auth.v1.Disable2FAReq
+	0,  // 21: auth.v1.AuthService.UpdatePassword:input_type -> auth.v1.UpdatePasswordReq
+	19, // 22: auth.v1.AuthService.GetCurrencyList:input_type -> auth.v1.GetCurrencyListReq
+	4,  // 23: auth.v1.AuthService.Login:output_type -> auth.v1.LoginRes
+	6,  // 24: auth.v1.AuthService.Register:output_type -> auth.v1.RegisterRes
+	8,  // 25: auth.v1.AuthService.Logout:output_type -> auth.v1.LogoutRes
+	10, // 26: auth.v1.AuthService.RefreshToken:output_type -> auth.v1.RefreshTokenRes
+	13, // 27: auth.v1.AuthService.Generate2FA:output_type -> auth.v1.Generate2FARes
+	15, // 28: auth.v1.AuthService.Enable2FA:output_type -> auth.v1.Enable2FARes
+	17, // 29: auth.v1.AuthService.Disable2FA:output_type -> auth.v1.Disable2FARes
+	1,  // 30: auth.v1.AuthService.UpdatePassword:output_type -> auth.v1.UpdatePasswordRes
+	20, // 31: auth.v1.AuthService.GetCurrencyList:output_type -> auth.v1.GetCurrencyListRes
+	23, // [23:32] is the sub-list for method output_type
+	14, // [14:23] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_auth_v1_auth_proto_init() }
@@ -1105,7 +1262,7 @@ func file_auth_v1_auth_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_auth_v1_auth_proto_rawDesc), len(file_auth_v1_auth_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   18,
+			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

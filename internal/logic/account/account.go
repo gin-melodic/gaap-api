@@ -492,15 +492,26 @@ func directDeleteAccount(ctx context.Context, dbTx gdb.TX, account entity.Accoun
 		WhereArgs:      []interface{}{account.Id},
 		// Casecase
 		CascadeFunc: func(ctx context.Context, tx gdb.TX) error {
-			if !includeChildren || !account.IsGroup {
-				return nil
+			if includeChildren && account.IsGroup {
+				_, err := tx.Model(dao.Accounts.Table()).
+					Where(dao.Accounts.Columns().ParentId, account.Id).
+					Data(g.Map{dao.Accounts.Columns().DeletedAt: gtime.Now()}).
+					Update()
+				if err != nil {
+					return err
+				}
 			}
-			_, err := tx.Model(dao.Accounts.Table()).
-				Where(dao.Accounts.Columns().ParentId, account.Id).
-				Data(g.Map{dao.Accounts.Columns().DeletedAt: gtime.Now()}).
-				Update()
-
-			return err
+			// Also delete the linked equity account if present
+			if account.EquityAccountId != uuid.Nil {
+				_, err := tx.Model(dao.Accounts.Table()).
+					Where(dao.Accounts.Columns().Id, account.EquityAccountId).
+					Data(g.Map{dao.Accounts.Columns().DeletedAt: gtime.Now()}).
+					Update()
+				if err != nil {
+					return err
+				}
+			}
+			return nil
 		},
 	})
 }

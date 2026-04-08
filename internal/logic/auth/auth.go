@@ -164,13 +164,26 @@ func (s *sAuth) Register(ctx context.Context, in model.RegisterInput) (out *mode
 		return nil, gerror.Wrap(err, "failed to hash password")
 	}
 
+	mainCurrency := strings.ToUpper(strings.TrimSpace(in.MainCurrency))
+	if mainCurrency == "" {
+		mainCurrency = "USD"
+	}
+
+	currencyCount, err := dao.Currencies.Ctx(ctx).Where("code", mainCurrency).WhereNull("deleted_at").Count()
+	if err != nil {
+		return nil, gerror.Wrap(err, "failed to validate main currency")
+	}
+	if currencyCount == 0 {
+		return nil, gerror.New("invalid main currency")
+	}
+
 	// Create user
 	user := &entity.Users{
 		Id:           uuid.New(),
 		Email:        in.Email,
 		Password:     string(hashedPassword),
 		Plan:         utils.UserLevelFree,
-		MainCurrency: "USD",
+		MainCurrency: mainCurrency,
 	}
 	// Try to get a default theme
 	var theme *entity.Themes
@@ -525,4 +538,21 @@ func (s *sAuth) UpdatePassword(ctx context.Context, password, newPassword, confi
 
 		return nil
 	})
+}
+
+// GetCurrencyList returns a list of all supported currencies
+func (s *sAuth) GetCurrencyList(ctx context.Context) ([]string, error) {
+	var currencies []*entity.Currencies
+	err := dao.Currencies.Ctx(ctx).WhereNull("deleted_at").Scan(&currencies)
+	if err != nil {
+		return nil, gerror.Wrap(err, "failed to get currency list")
+	}
+
+	var codes []string
+	for _, c := range currencies {
+		if c != nil {
+			codes = append(codes, c.Code)
+		}
+	}
+	return codes, nil
 }

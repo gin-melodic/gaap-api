@@ -24,6 +24,8 @@ type (
 		// IsTokenBlacklisted checks if a token is in the blacklist
 		IsTokenBlacklisted(ctx context.Context, token string) bool
 		UpdatePassword(ctx context.Context, password string, newPassword string, confirmPassword string) error
+		// GetCurrencyList returns a list of all supported currencies
+		GetCurrencyList(ctx context.Context) ([]string, error)
 	}
 )
 
