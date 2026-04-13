@@ -50,9 +50,9 @@ func (s *sDashboard) loadDashboardSummaryFromDB(ctx context.Context, userId stri
 
 	// Sum assets using MoneyHelper for precision
 	var totalAssets *utils.MoneyHelper
-	for i, acc := range assetAccounts {
+	for _, acc := range assetAccounts {
 		accBalance := utils.NewFromEntity(&acc)
-		if i == 0 {
+		if totalAssets == nil {
 			totalAssets = accBalance
 			out.CurrencyCode = acc.CurrencyCode
 		} else {
@@ -81,9 +81,9 @@ func (s *sDashboard) loadDashboardSummaryFromDB(ctx context.Context, userId stri
 
 	// Sum liabilities
 	var totalLiabilities *utils.MoneyHelper
-	for i, acc := range liabilityAccounts {
+	for _, acc := range liabilityAccounts {
 		accBalance := utils.NewFromEntity(&acc)
-		if i == 0 {
+		if totalLiabilities == nil {
 			totalLiabilities = accBalance
 		} else {
 			totalLiabilities, err = totalLiabilities.Add(accBalance)
