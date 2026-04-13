@@ -31,7 +31,7 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-  cmd = "go build -gcflags='all=-N -l' -o ./tmp/main ."
+  cmd = "go build -gcflags=\"all=-N -l\" -o ./tmp/main ."
   bin = "tmp/main"
   include_ext = ["go", "yaml", "toml", "ini"]
   exclude_dir = ["tmp", "vendor", "testdata"]

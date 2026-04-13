@@ -164,10 +164,46 @@ func InitDatabaseConfig(ctx context.Context) {
 	})
 }
 
-// InitConfig is a placeholder for any additional configuration initialization.
-// Most secrets are now handled via os.Getenv directly in the logic/middleware.
+// InitConfig loads environment variables from .env file if it exists.
 func InitConfig(ctx context.Context) {
-	// Add any global config overrides here if needed
+	wd, _ := os.Getwd()
+	g.Log().Infof(ctx, "Current working directory: %s", wd)
+
+	envFile := ".env"
+	if gfile.Exists(envFile) {
+		g.Log().Infof(ctx, "Loading environment variables from %s...", gfile.Abs(envFile))
+		content := gfile.GetContents(envFile)
+		content = strings.ReplaceAll(content, "\r\n", "\n")
+		lines := strings.Split(content, "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				key := strings.TrimSpace(parts[0])
+				value := strings.TrimSpace(parts[1])
+				// Basic unquoting if present
+				if (strings.HasPrefix(value, "\"") && strings.HasSuffix(value, "\"")) ||
+					(strings.HasPrefix(value, "'") && strings.HasSuffix(value, "'")) {
+					value = value[1 : len(value)-1]
+				}
+
+				// Local development override: if running natively and host is set to a docker service name,
+				// redirect to 127.0.0.1 since middleware is in Docker and exposed to localhost.
+				if value == "postgres" || value == "redis" || value == "rabbitmq" {
+					value = "127.0.0.1"
+				}
+
+				if os.Getenv(key) == "" {
+					os.Setenv(key, value)
+				}
+			}
+		}
+	} else {
+		g.Log().Warningf(ctx, "Environment file not found: %s", gfile.Abs(envFile))
+	}
 }
 
 // InitALE initializes the Application Layer Encryption (ALE) system

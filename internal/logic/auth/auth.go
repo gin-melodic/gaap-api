@@ -2,8 +2,6 @@ package auth
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"os"
 	"strings"
@@ -157,9 +155,8 @@ func (s *sAuth) Register(ctx context.Context, in model.RegisterInput) (out *mode
 		return nil, gerror.New("email already exists")
 	}
 
-	// Hash password
-	hashedPwd := sha256.Sum256([]byte(in.Password))
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(hex.EncodeToString(hashedPwd[:])), bcrypt.DefaultCost)
+	// Hash password (in.Password is expected to be a SHA-256 hex string from frontend)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to hash password")
 	}
@@ -520,8 +517,8 @@ func (s *sAuth) UpdatePassword(ctx context.Context, password, newPassword, confi
 			return gerror.New("current password is required")
 		}
 
-		hashedNewPassword := sha256.Sum256([]byte(newPassword))
-		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(hex.EncodeToString(hashedNewPassword[:])), bcrypt.DefaultCost)
+		// newPassword is expected to be a SHA-256 hex string from frontend
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 		if err != nil {
 			return gerror.Wrap(err, "failed to hash password")
 		}
