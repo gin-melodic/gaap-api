@@ -2,8 +2,8 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-  cmd = "sh hack/build_dev.sh"
-  bin = "tmp/main"
+  cmd = "cmd /c hack\\build_dev.bat"
+  bin = "tmp/main.exe"
   include_ext = ["go", "yaml", "toml", "ini", "json"]
   exclude_dir = ["tmp", "vendor", "testdata", ".git"]
   include_dir = []
