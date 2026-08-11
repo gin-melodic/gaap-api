@@ -65,6 +65,11 @@ func ALEMiddleware(mode ALEMode) func(r *ghttp.Request) {
 			if userId == "" {
 				// Fall back to bootstrap if no auth header for session mode
 				actualMode = ALEModeBootstrap
+				// r.Response.WriteJsonExit(g.Map{
+				// 	"code":    401,
+				// 	"message": "Authorization required for session mode",
+				// })
+				// return
 			}
 		}
 
@@ -72,6 +77,10 @@ func ALEMiddleware(mode ALEMode) func(r *ghttp.Request) {
 		contentType := r.Header.Get("Content-Type")
 		if contentType != "application/octet-stream" {
 			// Not an ALE-encrypted request, pass through
+			// if it's a application/json request, parse data to body directly
+			// if contentType == "application/json" {
+			// 	r.Body = r.GetBody()
+			// }
 			r.Middleware.Next()
 			return
 		}

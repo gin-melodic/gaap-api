@@ -2,8 +2,9 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-  cmd = "sh hack/build_dev.sh"
-  bin = "tmp/main"
+  cmd = "cmd /c hack\\build_dev.bat"
+  bin = "tmp/main.exe"
+  full_bin = "dlv.exe --accept-multiclient --headless --listen=:2345 --api-version=2 exec --continue tmp\\main"
   include_ext = ["go", "yaml", "toml", "ini", "json"]
   exclude_dir = ["tmp", "vendor", "testdata", ".git"]
   include_dir = []
@@ -11,7 +12,7 @@ tmp_dir = "tmp"
   delay = 1000
   stop_on_error = true
   send_interrupt = false
-  kill_delay = 500
+  kill_delay = 2000
 
 [log]
   time = true

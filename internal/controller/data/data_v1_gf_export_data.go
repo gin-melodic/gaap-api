@@ -17,9 +17,10 @@ func (c *ControllerV1) GfExportData(ctx context.Context, req *v1.GfExportDataReq
 	}
 
 	var startDate, endDate string
-	if req.GetParams() != nil {
-		startDate = req.GetParams().GetStartDate()
-		endDate = req.GetParams().GetEndDate()
+	params := req.ExportDataReq.GetParams()
+	if params != nil {
+		startDate = params.GetStartDate()
+		endDate = params.GetEndDate()
 	}
 
 	input := model.DataExportInput{

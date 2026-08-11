@@ -9,6 +9,7 @@ import (
 	"gaap-api/internal/dao"
 	"gaap-api/internal/logic/dashboard"
 	"gaap-api/internal/logic/utils"
+	"gaap-api/internal/middleware"
 	"gaap-api/internal/model"
 	"gaap-api/internal/model/entity"
 	"gaap-api/internal/service"
@@ -37,12 +38,17 @@ func (s *sTask) processAccountMigration(ctx context.Context, payload json.RawMes
 	migrationPayload := data.Payload
 
 	// Update task status to running
-	_, err = dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, taskId).Data(entity.Tasks{
-		Status:    model.TaskStatusRunning,
-		StartedAt: gtime.Now(),
+	_, err = dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, taskId).Data(g.Map{
+		dao.Tasks.Columns().Status:    model.TaskStatusRunning,
+		dao.Tasks.Columns().StartedAt: gtime.Now(),
 	}).Update()
 	if err != nil {
 		return gerror.Wrap(err, "failed to update task status")
+	}
+
+	// Add userId to context for GetTask
+	if migrationPayload.Payload != nil {
+		ctx = context.WithValue(ctx, middleware.UserIdKey, migrationPayload.Payload.UserId.String())
 	}
 
 	// Check if task was cancelled

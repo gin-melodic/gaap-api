@@ -112,15 +112,13 @@ func (s *sTask) CreateTask(ctx context.Context, in model.TaskCreateInput[any]) (
 		return nil, gerror.Wrap(err, "failed to generate UUID7 for new task")
 	}
 
-	taskEntity := entity.Tasks{
-		Id:      taskId,
-		UserId:  in.UserId,
-		Type:    in.Type,
-		Status:  model.TaskStatusPending,
-		Payload: string(payloadBytes),
-	}
-
-	_, err = dao.Tasks.Ctx(ctx).Data(taskEntity).Insert()
+	_, err = dao.Tasks.Ctx(ctx).Data(g.Map{
+		dao.Tasks.Columns().Id:      taskId,
+		dao.Tasks.Columns().UserId:  in.UserId,
+		dao.Tasks.Columns().Type:    in.Type,
+		dao.Tasks.Columns().Status:  model.TaskStatusPending,
+		dao.Tasks.Columns().Payload: payloadBytes,
+	}).Insert()
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to create task")
 	}
@@ -160,9 +158,9 @@ func (s *sTask) CancelTask(ctx context.Context, id uuid.UUID) error {
 	// Only allow cancelling pending or running tasks
 	m = m.WhereIn(dao.Tasks.Columns().Status, []int{model.TaskStatusPending, model.TaskStatusRunning})
 
-	_, err := m.Data(entity.Tasks{
-		Status:      model.TaskStatusCancelled,
-		CompletedAt: gtime.Now(),
+	_, err := m.Data(g.Map{
+		dao.Tasks.Columns().Status:      model.TaskStatusCancelled,
+		dao.Tasks.Columns().CompletedAt: gtime.Now(),
 	}).Update()
 
 	if err != nil {
@@ -199,10 +197,10 @@ func (s *sTask) RetryTask(ctx context.Context, id uuid.UUID) (*model.TaskOutput[
 		return nil, gerror.New("task queue is not available, please try again later")
 	}
 
-	_, err = dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, id).Data(entity.Tasks{
-		Status:         model.TaskStatusPending,
-		Progress:       0,
-		ProcessedItems: 0,
+	_, err = dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, id).Data(g.Map{
+		dao.Tasks.Columns().Status:         model.TaskStatusPending,
+		dao.Tasks.Columns().Progress:       0,
+		dao.Tasks.Columns().ProcessedItems: 0,
 	}).Update()
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to reset task")
@@ -234,9 +232,9 @@ func (s *sTask) RetryTask(ctx context.Context, id uuid.UUID) (*model.TaskOutput[
 
 // UpdateTaskProgress updates task progress
 func (s *sTask) UpdateTaskProgress(ctx context.Context, id uuid.UUID, progress int, processedItems int) error {
-	_, err := dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, id).Data(entity.Tasks{
-		Progress:       progress,
-		ProcessedItems: processedItems,
+	_, err := dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, id).Data(g.Map{
+		dao.Tasks.Columns().Progress:       progress,
+		dao.Tasks.Columns().ProcessedItems: processedItems,
 	}).Update()
 	if err != nil {
 		return gerror.Wrap(err, "failed to update task progress")
@@ -251,11 +249,11 @@ func (s *sTask) UpdateTaskProgress(ctx context.Context, id uuid.UUID, progress i
 // CompleteTask marks a task as completed
 func (s *sTask) CompleteTask(ctx context.Context, id uuid.UUID, result interface{}) error {
 	resultBytes, _ := json.Marshal(result)
-	_, err := dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, id).Data(entity.Tasks{
-		Status:      model.TaskStatusCompleted,
-		Progress:    100,
-		Result:      string(resultBytes),
-		CompletedAt: gtime.Now(),
+	_, err := dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, id).Data(g.Map{
+		dao.Tasks.Columns().Status:      model.TaskStatusCompleted,
+		dao.Tasks.Columns().Progress:    100,
+		dao.Tasks.Columns().Result:      resultBytes,
+		dao.Tasks.Columns().CompletedAt: gtime.Now(),
 	}).Update()
 	if err != nil {
 		return gerror.Wrap(err, "failed to complete task")
@@ -273,10 +271,10 @@ func (s *sTask) CompleteTask(ctx context.Context, id uuid.UUID, result interface
 func (s *sTask) FailTask(ctx context.Context, id uuid.UUID, errMsg string) error {
 	result := model.AccountMigrationResult{Error: errMsg}
 	resultBytes, _ := json.Marshal(result)
-	_, err := dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, id).Data(entity.Tasks{
-		Status:      model.TaskStatusFailed,
-		Result:      string(resultBytes),
-		CompletedAt: gtime.Now(),
+	_, err := dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, id).Data(g.Map{
+		dao.Tasks.Columns().Status:      model.TaskStatusFailed,
+		dao.Tasks.Columns().Result:      resultBytes,
+		dao.Tasks.Columns().CompletedAt: gtime.Now(),
 	}).Update()
 	if err != nil {
 		return gerror.Wrap(err, "failed to mark task as failed")

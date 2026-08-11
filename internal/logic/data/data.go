@@ -42,14 +42,18 @@ func (s *sData) Export(ctx context.Context, in model.DataExportInput) (*model.Da
 	}
 
 	// Validate date range
+	if in.StartDate == "" || in.EndDate == "" {
+		return nil, gerror.New("start date and end date are required")
+	}
+
 	startDate, err := time.Parse("2006-01-02", in.StartDate)
 	if err != nil {
-		return nil, gerror.New("invalid start date format")
+		return nil, gerror.New(fmt.Sprintf("invalid start date format: %s (expected YYYY-MM-DD)", in.StartDate))
 	}
 
 	endDate, err := time.Parse("2006-01-02", in.EndDate)
 	if err != nil {
-		return nil, gerror.New("invalid end date format")
+		return nil, gerror.New(fmt.Sprintf("invalid end date format: %s (expected YYYY-MM-DD)", in.EndDate))
 	}
 
 	if endDate.Before(startDate) {

@@ -179,6 +179,7 @@ func (s *sAuth) Register(ctx context.Context, in model.RegisterInput) (out *mode
 		Id:           uuid.New(),
 		Email:        in.Email,
 		Password:     string(hashedPassword),
+		Nickname:     in.Nickname,
 		Plan:         utils.UserLevelFree,
 		MainCurrency: mainCurrency,
 	}
