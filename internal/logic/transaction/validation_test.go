@@ -1,9 +1,15 @@
 package transaction
 
 import (
+	"context"
 	"testing"
 
 	"gaap-api/internal/logic/utils"
+	"gaap-api/internal/testutil"
+
+	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/gogf/gf/v2/database/gdb"
+	"github.com/google/uuid"
 )
 
 func TestValidateMoneyBoundaries(t *testing.T) {
@@ -34,6 +40,45 @@ func TestValidateMoneyBoundaries(t *testing.T) {
 				t.Fatalf("validateMoney(%d, %d, %t) error = %v, wantError %t", test.units, test.nanos, test.allowSigned, err, test.wantError)
 			}
 		})
+	}
+}
+
+func TestLockOwnedAccountsUsesDeterministicRowLocks(t *testing.T) {
+	mock, db := testutil.InitMockDB(t)
+	mock.MatchExpectationsInOrder(false)
+	testutil.MockDBInit(mock)
+	testutil.MockMeta(mock, "accounts", []string{
+		"id", "user_id", "currency_code", "is_group", "type", "deleted_at",
+	})
+
+	userID := uuid.MustParse("10000000-0000-0000-0000-000000000000")
+	lowID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	highID := uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff")
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT .* FROM "?accounts"?.*ORDER BY "?id"? ASC.*FOR UPDATE`).
+		WithArgs(lowID.String(), highID.String(), userID.String()).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "user_id", "currency_code", "is_group", "type", "deleted_at",
+		}).
+			AddRow(lowID, userID, "CNY", false, utils.AccountTypeAsset, nil).
+			AddRow(highID, userID, "CNY", false, utils.AccountTypeAsset, nil))
+	mock.ExpectCommit()
+
+	err := db.Transaction(context.Background(), func(ctx context.Context, tx gdb.TX) error {
+		accounts, lockErr := lockOwnedAccounts(ctx, tx, userID.String(), []uuid.UUID{highID, lowID})
+		if lockErr != nil {
+			return lockErr
+		}
+		if len(accounts) != 2 || accounts[0].Id != lowID || accounts[1].Id != highID {
+			t.Fatalf("accounts were not returned in deterministic order: %+v", accounts)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("lockOwnedAccounts failed: %v", err)
+	}
+	if expectationErr := mock.ExpectationsWereMet(); expectationErr != nil {
+		t.Fatalf("expected ordered SELECT FOR UPDATE: %v", expectationErr)
 	}
 }
 

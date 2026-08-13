@@ -346,6 +346,13 @@ func writeTrendSnapshot(client *gredis.Redis, key string, data []model.DailyBala
 
 // ─── loadBalanceTrendFromDB extracted from original GetBalanceTrend ───────────
 
+type accountBalance struct {
+	Id           uuid.UUID
+	BalanceUnits int64
+	BalanceNanos int
+	CurrencyCode string
+}
+
 func (s *sDashboard) loadBalanceTrendFromDB(ctx context.Context, userId string, accounts []uuid.UUID) ([]model.DailyBalance, error) {
 	now := time.Now()
 	endDate := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 999999999, now.Location())
@@ -374,13 +381,7 @@ func (s *sDashboard) loadBalanceTrendFromDB(ctx context.Context, userId string, 
 	}
 
 	// 1. Get CURRENT balances for these accounts
-	type AccountBalance struct {
-		Id           uuid.UUID
-		BalanceUnits int64
-		BalanceNanos int
-		CurrencyCode string
-	}
-	currentBalances := make(map[uuid.UUID]AccountBalance)
+	currentBalances := make(map[uuid.UUID]accountBalance)
 	var accountRecs []entity.Accounts
 	err := dao.Accounts.Ctx(ctx).
 		WhereIn(dao.Accounts.Columns().Id, accounts).
@@ -390,7 +391,7 @@ func (s *sDashboard) loadBalanceTrendFromDB(ctx context.Context, userId string, 
 		return nil, gerror.Wrap(err, "failed to get account balances")
 	}
 	for _, acc := range accountRecs {
-		currentBalances[acc.Id] = AccountBalance{
+		currentBalances[acc.Id] = accountBalance{
 			Id:           acc.Id,
 			BalanceUnits: acc.BalanceUnits,
 			BalanceNanos: acc.BalanceNanos,
@@ -405,6 +406,7 @@ func (s *sDashboard) loadBalanceTrendFromDB(ctx context.Context, userId string, 
 	err = dao.Transactions.Ctx(ctx).
 		WhereIn(dao.Transactions.Columns().FromAccountId, accounts).
 		WhereGTE(dao.Transactions.Columns().Date, startOfDay).
+		WhereNull(dao.Transactions.Columns().DeletedAt).
 		Limit(10000).
 		Scan(&fromTrans)
 	if err != nil {
@@ -414,6 +416,7 @@ func (s *sDashboard) loadBalanceTrendFromDB(ctx context.Context, userId string, 
 	err = dao.Transactions.Ctx(ctx).
 		WhereIn(dao.Transactions.Columns().ToAccountId, accounts).
 		WhereGTE(dao.Transactions.Columns().Date, startOfDay).
+		WhereNull(dao.Transactions.Columns().DeletedAt).
 		Limit(10000).
 		Scan(&toTrans)
 	if err != nil {
@@ -433,6 +436,14 @@ func (s *sDashboard) loadBalanceTrendFromDB(ctx context.Context, userId string, 
 	for _, t := range txMap {
 		transactions = append(transactions, t)
 	}
+
+	return calculateBalanceTrend(now, currentBalances, transactions), nil
+}
+
+func calculateBalanceTrend(now time.Time, currentBalances map[uuid.UUID]accountBalance, transactions []entity.Transactions) []model.DailyBalance {
+	endDate := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 999999999, now.Location())
+	startDate := endDate.AddDate(0, 0, -29)
+	startOfDay := time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, startDate.Location())
 
 	// Create a map of Date -> Transactions
 	transactionsByDate := make(map[string][]entity.Transactions)
@@ -521,5 +532,5 @@ func (s *sDashboard) loadBalanceTrendFromDB(ctx context.Context, userId string, 
 		}
 	}
 
-	return out, nil
+	return out
 }
