@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     currency_code VARCHAR(10) NOT NULL,
     balance_units BIGINT NOT NULL DEFAULT 0,
     balance_nanos INTEGER NOT NULL DEFAULT 0,
-    balance_decimal NUMERIC(20, 9) GENERATED ALWAYS AS ( balance_units + (balance_nanos::NUMERIC / 1000000000) ) STORED,
+    balance_decimal NUMERIC(28, 9) GENERATED ALWAYS AS ( balance_units + (balance_nanos::NUMERIC / 1000000000) ) STORED,
     default_child_id UUID REFERENCES accounts(id) ON DELETE SET NULL,
     equity_account_id UUID REFERENCES accounts(id) ON DELETE SET NULL,
     date DATE,
@@ -126,7 +126,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     currency_code VARCHAR(10) NOT NULL,
     balance_units BIGINT NOT NULL DEFAULT 0,
     balance_nanos INTEGER NOT NULL DEFAULT 0,
-    balance_decimal NUMERIC(20, 9) GENERATED ALWAYS AS ( balance_units + (balance_nanos::NUMERIC / 1000000000) ) STORED,
+    balance_decimal NUMERIC(28, 9) GENERATED ALWAYS AS ( balance_units + (balance_nanos::NUMERIC / 1000000000) ) STORED,
     note VARCHAR(500),
     type INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -204,4 +204,3 @@ COMMENT ON TABLE migration_mappings IS 'Temporary storage for safe data migratio
 
 -- Resume Foreign Keys Check
 SET session_replication_role = DEFAULT;
-

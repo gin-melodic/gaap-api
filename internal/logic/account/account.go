@@ -66,8 +66,8 @@ func (s *sAccount) CreateAccount(ctx context.Context, in model.AccountCreateInpu
 		return nil, gerror.New("invalid authenticated user")
 	}
 	in.UserId = parsedUserId
-	if strings.TrimSpace(in.Name) == "" {
-		return nil, gerror.New("account name is required")
+	if err := validateAccountMetadata(in.Name, in.Number, in.Remarks); err != nil {
+		return nil, err
 	}
 	if err := validateAccountType(in.Type); err != nil {
 		return nil, err
@@ -199,8 +199,8 @@ func (s *sAccount) UpdateAccount(ctx context.Context, id uuid.UUID, in model.Acc
 	if existing.UserId.String() != userId {
 		return nil, gerror.New("account does not belong to user")
 	}
-	if strings.TrimSpace(in.Name) == "" {
-		return nil, gerror.New("account name is required")
+	if err := validateAccountMetadata(in.Name, in.Number, in.Remarks); err != nil {
+		return nil, err
 	}
 	if err := validateAccountType(in.Type); err != nil {
 		return nil, err

@@ -98,6 +98,9 @@ func resolveTransactionSort(sortBy, sortOrder string) (column string, ascending 
 // CreateTransaction creates a new transaction.
 // If tx is provided, it will be used for the transaction.
 func (s *sTransaction) CreateTransaction(ctx context.Context, in model.TransactionCreateInput, tx gdb.TX) (out *entity.Transactions, err error) {
+	if err := validateTransactionNote(in.Note); err != nil {
+		return nil, err
+	}
 	if tx != nil {
 		return s.createTransactionInTx(ctx, tx, in)
 	}
@@ -222,6 +225,9 @@ func (s *sTransaction) getTransactionByIdInTx(ctx context.Context, tx gdb.TX, id
 }
 
 func (s *sTransaction) UpdateTransaction(ctx context.Context, id uuid.UUID, in model.TransactionUpdateInput) (out *entity.Transactions, err error) {
+	if err := validateTransactionNote(in.Note); err != nil {
+		return nil, err
+	}
 	userId := utils.RequireUserId(ctx)
 	var affectedAccountIds []uuid.UUID
 

@@ -3,6 +3,7 @@ package account
 import (
 	"context"
 	"strings"
+	"unicode/utf8"
 
 	"gaap-api/internal/dao"
 	"gaap-api/internal/logic/utils"
@@ -12,6 +13,29 @@ import (
 	"github.com/gogf/gf/v2/errors/gerror"
 	"github.com/google/uuid"
 )
+
+const (
+	maxAccountNameLength    = 100
+	maxAccountNumberLength  = 50
+	maxAccountRemarksLength = 500
+)
+
+func validateAccountMetadata(name, number, remarks string) error {
+	trimmedName := strings.TrimSpace(name)
+	if trimmedName == "" {
+		return gerror.New("account name is required")
+	}
+	if utf8.RuneCountInString(trimmedName) > maxAccountNameLength {
+		return gerror.New("account name must not exceed 100 characters")
+	}
+	if utf8.RuneCountInString(number) > maxAccountNumberLength {
+		return gerror.New("account number must not exceed 50 characters")
+	}
+	if utf8.RuneCountInString(remarks) > maxAccountRemarksLength {
+		return gerror.New("account remarks must not exceed 500 characters")
+	}
+	return nil
+}
 
 func validateAccountType(accountType int) error {
 	if accountType < utils.AccountTypeAsset || accountType > utils.AccountTypeEquity {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"gaap-api/internal/dao"
 	"gaap-api/internal/logic/utils"
@@ -15,6 +16,15 @@ import (
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 )
+
+const maxTransactionNoteLength = 500
+
+func validateTransactionNote(note string) error {
+	if utf8.RuneCountInString(note) > maxTransactionNoteLength {
+		return gerror.New("transaction note must not exceed 500 characters")
+	}
+	return nil
+}
 
 func validateMoney(units int64, nanos int, allowSigned bool) error {
 	if nanos < -999_999_999 || nanos > 999_999_999 {
