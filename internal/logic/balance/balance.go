@@ -151,25 +151,20 @@ func (s *sBalance) updateBalanceInTx(ctx context.Context, dbTx gdb.TX, accountId
 		return nil // Skip if no change
 	}
 
-	g.Log().Debugf(ctx, "Updating balance for account %s by units=%d nanos=%d", accountId, deltaUnits, deltaNanos)
-
 	// Get current balance with row lock (SELECT FOR UPDATE)
 	var account entity.Accounts
 	err := dbTx.Model(dao.Accounts.Table()).
-		Where("id", accountId).
-		Where("deleted_at IS NULL").
+		Where(dao.Accounts.Columns().Id, accountId).
+		WhereNull(dao.Accounts.Columns().DeletedAt).
 		LockUpdate().
 		Scan(&account)
 	if err != nil {
-		g.Log().Errorf(ctx, "Failed to get account %s: %v", accountId, err)
+		g.Log().Errorf(ctx, "Failed to load account balance: %v", err)
 		return gerror.Wrapf(err, "failed to get account %s", accountId)
 	}
 
 	if account.Id == uuid.Nil {
-		// Account not found - this is OK for category accounts (EXPENSE/INCOME types)
-		// which don't need balance tracking
-		g.Log().Warningf(ctx, "Account %s not found, skipping balance update", accountId)
-		return nil
+		return gerror.New("account not found during balance update")
 	}
 
 	// Use MoneyHelper for safe arithmetic
@@ -193,25 +188,22 @@ func (s *sBalance) updateBalanceInTx(ctx context.Context, dbTx gdb.TX, accountId
 
 	newUnits, newNanos := newBalance.ToEntityValues()
 
-	g.Log().Debugf(ctx, "Account %s: current=(%d,%d), delta=(%d,%d), new=(%d,%d)",
-		accountId, account.BalanceUnits, account.BalanceNanos, deltaUnits, deltaNanos, newUnits, newNanos)
-
 	// Update balance using entity struct
-	_, err = dbTx.Model(dao.Accounts.Table()).
-		Where("id", accountId).
+	result, err := dbTx.Model(dao.Accounts.Table()).
+		Where(dao.Accounts.Columns().Id, accountId).
 		Data(g.Map{
 			dao.Accounts.Columns().BalanceUnits: newUnits,
 			dao.Accounts.Columns().BalanceNanos: int(newNanos),
 		}).
 		Update()
 	if err != nil {
-		g.Log().Errorf(ctx, "Failed to update balance for account %s: %v", accountId, err)
+		g.Log().Errorf(ctx, "Failed to update account balance: %v", err)
 		return gerror.Wrapf(err, "failed to update balance for account %s", accountId)
 	}
+	rows, rowsErr := result.RowsAffected()
+	if rowsErr != nil || rows != 1 {
+		return gerror.New("balance update did not affect exactly one account")
+	}
 
-	// Invalidate account cache after balance update to ensure cache consistency
-	_ = utils.InvalidateCache(ctx, utils.AccountCacheKey(accountId.String()))
-
-	g.Log().Debugf(ctx, "Successfully updated balance for account %s to (%d,%d)", accountId, newUnits, newNanos)
 	return nil
 }

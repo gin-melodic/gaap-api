@@ -32,13 +32,13 @@ func GetOrLoad[T any](
 	if err == nil && !cached.IsNil() {
 		var result T
 		if err := json.Unmarshal(cached.Bytes(), &result); err == nil {
-			g.Log().Debugf(ctx, "Cache HIT: %s", key)
+			g.Log().Debug(ctx, "Cache hit")
 			return &result, nil
 		}
-		g.Log().Warningf(ctx, "Cache data unmarshal failed for key %s: %v", key, err)
+		g.Log().Warningf(ctx, "Cache data decode failed: %v", err)
 	}
 
-	g.Log().Debugf(ctx, "Cache MISS: %s", key)
+	g.Log().Debug(ctx, "Cache miss")
 
 	// 2. Execute loader
 	result, err := loader(ctx)
@@ -142,7 +142,7 @@ func InvalidateCache(ctx context.Context, keys ...string) error {
 		return err
 	}
 
-	g.Log().Debugf(ctx, "Invalidated cache keys: %v", keys)
+	g.Log().Debugf(ctx, "Invalidated %d cache entries", len(keys))
 	return nil
 }
 
@@ -166,7 +166,7 @@ func InvalidatePattern(ctx context.Context, pattern string) error {
 		return err
 	}
 
-	g.Log().Infof(ctx, "Invalidated cache pattern %s: %d keys", pattern, len(keys))
+	g.Log().Infof(ctx, "Invalidated %d cache entries by pattern", len(keys))
 	return nil
 }
 
@@ -195,13 +195,13 @@ func RefreshCache[T any](
 func setCache[T any](client *gredis.Redis, key string, value *T, ttl time.Duration) error {
 	data, err := json.Marshal(value)
 	if err != nil {
-		g.Log().Errorf(context.Background(), "Failed to marshal cache data for key %s: %v", key, err)
+		g.Log().Errorf(context.Background(), "Failed to encode cache data: %v", err)
 		return err
 	}
 
 	err = client.SetEX(context.Background(), key, data, int64(ttl.Seconds()))
 	if err != nil {
-		g.Log().Errorf(context.Background(), "Failed to set cache for key %s: %v", key, err)
+		g.Log().Errorf(context.Background(), "Failed to set cache data: %v", err)
 		return err
 	}
 
@@ -222,13 +222,13 @@ func batchSetCache[T any](
 		key := fmt.Sprintf("%s:%v", keyPrefix, id)
 		data, err := json.Marshal(item)
 		if err != nil {
-			g.Log().Errorf(ctx, "Failed to marshal item for key %s: %v", key, err)
+			g.Log().Errorf(ctx, "Failed to encode cache item: %v", err)
 			continue
 		}
 
 		err = client.SetEX(ctx, key, data, int64(ttl.Seconds()))
 		if err != nil {
-			g.Log().Errorf(ctx, "Failed to set cache for key %s: %v", key, err)
+			g.Log().Errorf(ctx, "Failed to set cache item: %v", err)
 		}
 	}
 }

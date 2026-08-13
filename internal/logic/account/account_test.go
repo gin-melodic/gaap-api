@@ -212,11 +212,11 @@ func Test_BalanceRestriction_AccountTypes(t *testing.T) {
 func Test_AccountingEquation_BasicBalance(t *testing.T) {
 	gtest.C(t, func(g *gtest.T) {
 		// Setup: A user has $10,000 in assets
-		assets := decimal.NewFromFloat(10000.00)
+		assets := decimal.RequireFromString("10000.00")
 		// $3,000 in credit card debt (liability)
-		liabilities := decimal.NewFromFloat(3000.00)
+		liabilities := decimal.RequireFromString("3000.00")
 		// Net worth (equity) = Assets - Liabilities = $7,000
-		equity := decimal.NewFromFloat(7000.00)
+		equity := decimal.RequireFromString("7000.00")
 
 		// Assert: Accounting equation holds
 		// Assets = Liabilities + Equity
@@ -239,7 +239,7 @@ func Test_AccountingEquation_OpeningBalance(t *testing.T) {
 
 		// Action: Create new checking account with $5,000 opening balance
 		// This creates a transaction: Equity -> Asset
-		openingBalance := decimal.NewFromFloat(5000.00)
+		openingBalance := decimal.RequireFromString("5000.00")
 
 		// Effect: Asset increases, Equity decreases
 		assets = assets.Add(openingBalance)

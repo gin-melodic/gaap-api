@@ -31,37 +31,51 @@ var (
 			boot.InitConfig(ctx)
 			boot.InitDatabaseConfig(ctx)
 			boot.InitRedis(ctx)
-			boot.Migrate(ctx)
-			boot.InitRabbitMQ(ctx)
+			if err := boot.ValidateProductionConfig(ctx); err != nil {
+				return err
+			}
+			if err := boot.Migrate(ctx); err != nil {
+				return err
+			}
+			if err := boot.InitRabbitMQ(ctx); err != nil {
+				return err
+			}
 
 			// Initialize ALE (Application Layer Encryption)
-			boot.InitALE(ctx)
+			if err := boot.InitALE(ctx); err != nil {
+				return err
+			}
 
-			// Sync account balances (with Redis distributed lock)
-			boot.SyncBalances(ctx)
+			// Account balances are committed atomically with transactions and must not
+			// be silently rewritten during startup. Rebuild derived dashboard data
+			// from the persisted source records instead.
+			boot.WarmDashboardSnapshots(ctx)
 
 			s := g.Server()
+			s.BindHandler("/v1/health/live", health.Live)
+			s.BindHandler("/v1/health/ready", health.Ready)
 
 			// Public routes (no authentication, no ALE - health checks, etc.)
 			s.Group("/", func(group *ghttp.RouterGroup) {
 				group.Middleware(ghttp.MiddlewareHandlerResponse)
 				group.Bind(
 					health.NewV1(),
-					config.NewV1(), // Config endpoints are public (currencies, etc.)
 				)
 			})
 
-			// WebSocket route (special handling, no MiddlewareHandlerResponse)
-			// Note: Route is /ws because Caddy's handle_path /api/* strips the /api prefix
-			s.BindHandler("/v1/ws", ws.Handler)
+			if !boot.IsProduction() {
+				s.BindHandler("/v1/ws", ws.Handler)
+			}
 
 			// Protected routes (authentication required, with ALE using Session Key)
 			s.Group("/", func(group *ghttp.RouterGroup) {
 				group.Middleware(middleware.ALEResponseMiddleware)
-				group.Middleware(middleware.AuthMiddleware) // AuthMiddleware must run BEFORE ALEMiddleware
 				group.Middleware(middleware.ALEMiddleware(middleware.ALEModeSession))
+				group.Middleware(middleware.BetaScopeMiddleware)
+				group.Middleware(middleware.AuthMiddleware)
 				group.Bind(
 					auth.NewV1(),
+					config.NewV1(),
 					user.NewV1(),
 					account.NewV1(),
 					transaction.NewV1(),

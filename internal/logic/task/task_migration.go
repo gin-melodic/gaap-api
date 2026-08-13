@@ -296,9 +296,6 @@ func (s *sTask) migrateBalanceWithTransactions(ctx context.Context, tx gdb.TX, s
 		return gerror.Wrap(err, "failed to apply equity-to-target balance change")
 	}
 
-	g.Log().Infof(ctx, "Successfully migrated balance from %s to %s via equity account (units=%d, nanos=%d)",
-		source.Name, target.Name, units, nanos)
-
 	return nil
 }
 

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -68,7 +70,7 @@ func SetClient(c Client) {
 func (r *RabbitMQ) IsConnected() bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	return r.channel != nil
+	return r.conn != nil && !r.conn.IsClosed() && r.channel != nil && !r.channel.IsClosed()
 }
 
 // Connect establishes connection to RabbitMQ with retry logic
@@ -91,7 +93,12 @@ func (r *RabbitMQ) Connect(ctx context.Context) error {
 		pass = "guest"
 	}
 
-	r.url = fmt.Sprintf("amqp://%s:%s@%s:%s/", user, pass, host, port)
+	r.url = (&url.URL{
+		Scheme: "amqp",
+		User:   url.UserPassword(user, pass),
+		Host:   net.JoinHostPort(host, port),
+		Path:   "/",
+	}).String()
 
 	// Retry connection with exponential backoff
 	maxRetries := 5
@@ -105,7 +112,15 @@ func (r *RabbitMQ) Connect(ctx context.Context) error {
 		if i < maxRetries-1 {
 			waitTime := time.Duration(1<<uint(i)) * time.Second // 1s, 2s, 4s, 8s, 16s
 			g.Log().Warningf(ctx, "RabbitMQ connection attempt %d failed, retrying in %v: %v", i+1, waitTime, err)
-			time.Sleep(waitTime)
+			timer := time.NewTimer(waitTime)
+			select {
+			case <-ctx.Done():
+				if !timer.Stop() {
+					<-timer.C
+				}
+				return ctx.Err()
+			case <-timer.C:
+			}
 		} else {
 			return fmt.Errorf("failed to connect to RabbitMQ after %d attempts: %w", maxRetries, err)
 		}

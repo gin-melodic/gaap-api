@@ -1,0 +1,8 @@
+server:
+  address: ':8000'
+  openapiPath: ''
+  swaggerPath: ''
+
+logger:
+  level: 'warning'
+  stdout: true

@@ -9,6 +9,13 @@ message BaseResponse {
   string message = 1;
 }
 
+// Transport-level error returned for any failed ALE request.
+message ErrorResponse {
+  int32 code = 1;
+  string message = 2;
+  string request_id = 3;
+}
+
 // Pagination metadata
 message PaginatedResponse {
   int32 total = 1;

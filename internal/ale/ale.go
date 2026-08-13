@@ -38,7 +38,9 @@ var (
 func CheckAndStoreNonce(ctx context.Context, nonce string) (bool, error) {
 	redisClient, _ := redis.GetRedisClient(ctx, redis.RedisTypeAle)
 	if redisClient == nil {
-		// Fallback: In-memory storage (not recommended for production)
+		if !allowInMemoryFallback() {
+			return false, fmt.Errorf("ALE Redis is required in production")
+		}
 		return checkAndStoreNonceInMemory(nonce), nil
 	}
 

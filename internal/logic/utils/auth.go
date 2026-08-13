@@ -23,33 +23,41 @@ func RequireUserId(ctx context.Context) string {
 
 // FieldAccessor
 type FieldAccessor[T any] struct {
-	Model        func(ctx context.Context) *gdb.Model
-	IdGetter     func(*T) uuid.UUID
-	UserIdGetter func(*T) uuid.UUID
-	ResourceName string
+	Model           func(ctx context.Context) *gdb.Model
+	IdGetter        func(*T) uuid.UUID
+	UserIdGetter    func(*T) uuid.UUID
+	IdColumn        string
+	DeletedAtColumn string
+	ResourceName    string
 }
 
 // Pre-defined accessors
 var (
 	AccountAccessor = FieldAccessor[entity.Accounts]{
-		Model:        func(ctx context.Context) *gdb.Model { return dao.Accounts.Ctx(ctx) },
-		IdGetter:     func(a *entity.Accounts) uuid.UUID { return a.Id },
-		UserIdGetter: func(a *entity.Accounts) uuid.UUID { return a.UserId },
-		ResourceName: "account",
+		Model:           func(ctx context.Context) *gdb.Model { return dao.Accounts.Ctx(ctx) },
+		IdGetter:        func(a *entity.Accounts) uuid.UUID { return a.Id },
+		UserIdGetter:    func(a *entity.Accounts) uuid.UUID { return a.UserId },
+		IdColumn:        dao.Accounts.Columns().Id,
+		DeletedAtColumn: dao.Accounts.Columns().DeletedAt,
+		ResourceName:    "account",
 	}
 
 	TransferAccessor = FieldAccessor[entity.Transactions]{
-		Model:        func(ctx context.Context) *gdb.Model { return dao.Transactions.Ctx(ctx) },
-		IdGetter:     func(t *entity.Transactions) uuid.UUID { return t.Id },
-		UserIdGetter: func(t *entity.Transactions) uuid.UUID { return t.UserId },
-		ResourceName: "transfer",
+		Model:           func(ctx context.Context) *gdb.Model { return dao.Transactions.Ctx(ctx) },
+		IdGetter:        func(t *entity.Transactions) uuid.UUID { return t.Id },
+		UserIdGetter:    func(t *entity.Transactions) uuid.UUID { return t.UserId },
+		IdColumn:        dao.Transactions.Columns().Id,
+		DeletedAtColumn: dao.Transactions.Columns().DeletedAt,
+		ResourceName:    "transfer",
 	}
 
 	UserAccessor = FieldAccessor[entity.Users]{
-		Model:        func(ctx context.Context) *gdb.Model { return dao.Users.Ctx(ctx) },
-		IdGetter:     func(u *entity.Users) uuid.UUID { return u.Id },
-		UserIdGetter: func(u *entity.Users) uuid.UUID { return u.Id }, // 用户验证自己
-		ResourceName: "user",
+		Model:           func(ctx context.Context) *gdb.Model { return dao.Users.Ctx(ctx) },
+		IdGetter:        func(u *entity.Users) uuid.UUID { return u.Id },
+		UserIdGetter:    func(u *entity.Users) uuid.UUID { return u.Id }, // 用户验证自己
+		IdColumn:        dao.Users.Columns().Id,
+		DeletedAtColumn: dao.Users.Columns().DeletedAt,
+		ResourceName:    "user",
 	}
 )
 
@@ -58,7 +66,11 @@ func GetAndVerify[T any](ctx context.Context, accessor FieldAccessor[T], resourc
 	userId := RequireUserId(ctx)
 
 	var resource T
-	err := accessor.Model(ctx).Where("id", resourceId).Scan(&resource)
+	model := accessor.Model(ctx).Where(accessor.IdColumn, resourceId)
+	if accessor.DeletedAtColumn != "" {
+		model = model.WhereNull(accessor.DeletedAtColumn)
+	}
+	err := model.Scan(&resource)
 	if err != nil {
 		return nil, gerror.Wrapf(err, "failed to get %s", accessor.ResourceName)
 	}

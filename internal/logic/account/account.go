@@ -5,10 +5,12 @@ import (
 	"database/sql"
 	"fmt"
 	"gaap-api/internal/dao"
+	"gaap-api/internal/logic/dashboard"
 	"gaap-api/internal/logic/utils"
 	"gaap-api/internal/model"
 	"gaap-api/internal/model/entity"
 	"gaap-api/internal/service"
+	"strings"
 
 	"github.com/gogf/gf/v2/database/gdb"
 	"github.com/gogf/gf/v2/errors/gerror"
@@ -58,56 +60,70 @@ func (s *sAccount) ListAccounts(ctx context.Context, in model.AccountQueryInput)
 }
 
 func (s *sAccount) CreateAccount(ctx context.Context, in model.AccountCreateInput) (out *entity.Accounts, err error) {
+	userId := utils.RequireUserId(ctx)
+	parsedUserId, err := uuid.Parse(userId)
+	if err != nil {
+		return nil, gerror.New("invalid authenticated user")
+	}
+	in.UserId = parsedUserId
+	if strings.TrimSpace(in.Name) == "" {
+		return nil, gerror.New("account name is required")
+	}
+	if err := validateAccountType(in.Type); err != nil {
+		return nil, err
+	}
 	// Store the requested initial balance
 	initialUnits := in.Units
 	initialNanos := in.Nanos
 	initialCurrency := in.CurrencyCode
 
-	// Handle empty UUID fields by converting to map and removing them
-	// so they are inserted as NULL (if nullable) or default.
-	data := gconv.Map(in)
-	if in.ParentId == uuid.Nil {
-		delete(data, "ParentId")
-	}
-	if in.DefaultChildId == uuid.Nil {
-		delete(data, "DefaultChildId")
-	}
-	// Remove empty string fields that would cause DB errors (especially Date which expects valid date or NULL)
 	accountDate := in.Date
 	if accountDate == "" {
-		// Default to today's date
 		accountDate = gtime.Now().Format("Y-m-d")
-		data["Date"] = accountDate
 	}
-	if in.Number == "" {
-		delete(data, "Number")
-	}
-	if in.Remarks == "" {
-		delete(data, "Remarks")
-	}
-
-	// Set Balance to 0 initially - balance will be updated via opening balance transaction
-	data["Units"] = 0
-	data["Nanos"] = 0
-	if initialCurrency == "" {
-		initialCurrency = "USD"
-	}
-	data["CurrencyCode"] = initialCurrency
 
 	// Generate UUID7 for the new account (since InsertAndGetId doesn't support UUID)
 	newId, err := uuid.NewV7()
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to generate UUID7 for new account")
 	}
-	data["Id"] = newId
-
-	// Always delete calculated fields
-	delete(data, "BalanceDecimal")
 
 	// Wrap everything in a single database transaction for atomicity
 	err = g.DB().Transaction(ctx, func(ctx context.Context, dbTx gdb.TX) error {
+		if accessErr := validateUserAccountHierarchyAccess(ctx, dbTx, in.UserId, in.IsGroup, in.ParentId); accessErr != nil {
+			return accessErr
+		}
+		resolvedCurrency, currencyErr := resolveUserBaseCurrency(ctx, dbTx, in.UserId, initialCurrency)
+		if currencyErr != nil {
+			return currencyErr
+		}
+		initialCurrency = resolvedCurrency
+		in.CurrencyCode = resolvedCurrency
+		if parentErr := validateParentAccount(ctx, dbTx, in.ParentId, in.UserId, resolvedCurrency); parentErr != nil {
+			return parentErr
+		}
+
+		data := g.Map{
+			dao.Accounts.Columns().Id:           newId,
+			dao.Accounts.Columns().UserId:       in.UserId,
+			dao.Accounts.Columns().Name:         strings.TrimSpace(in.Name),
+			dao.Accounts.Columns().Type:         in.Type,
+			dao.Accounts.Columns().IsGroup:      in.IsGroup,
+			dao.Accounts.Columns().CurrencyCode: resolvedCurrency,
+			dao.Accounts.Columns().BalanceUnits: 0,
+			dao.Accounts.Columns().BalanceNanos: 0,
+			dao.Accounts.Columns().Date:         gtime.NewFromStr(accountDate),
+			dao.Accounts.Columns().Number:       in.Number,
+			dao.Accounts.Columns().Remarks:      in.Remarks,
+		}
+		if in.ParentId != uuid.Nil {
+			data[dao.Accounts.Columns().ParentId] = in.ParentId
+		}
+		if in.DefaultChildId != uuid.Nil {
+			data[dao.Accounts.Columns().DefaultChildId] = in.DefaultChildId
+		}
 		// Insert the account
-		_, err := dbTx.Model(dao.Accounts.Table()).Data(data).Insert()
+		_, err := dbTx.Model(dao.Accounts.Table()).FieldsEx(dao.Accounts.Columns().BalanceDecimal).Data(data).Insert()
 		if err != nil {
 			return gerror.Wrap(err, "failed to insert initial account")
 		}
@@ -115,7 +131,7 @@ func (s *sAccount) CreateAccount(ctx context.Context, in model.AccountCreateInpu
 		// If initial balance is non-zero, create opening balance transaction
 		if (initialUnits != 0 || initialNanos != 0) && (in.Type == utils.AccountTypeAsset || in.Type == utils.AccountTypeLiability) {
 			// Get or create equity account for this currency
-			equityAccountId, err := s.getOrCreateOpeningBalanceEquityAccountInTx(ctx, dbTx, in.CurrencyCode, in.UserId, newId)
+			equityAccountId, err := s.getOrCreateOpeningBalanceEquityAccountInTx(ctx, dbTx, resolvedCurrency, in.UserId, newId)
 			if err != nil {
 				return gerror.Wrap(err, "failed to get/create equity account")
 			}
@@ -128,7 +144,7 @@ func (s *sAccount) CreateAccount(ctx context.Context, in model.AccountCreateInpu
 				BalanceUnits:  initialUnits,
 				BalanceNanos:  initialNanos,
 				CurrencyCode:  initialCurrency,
-				Note:          fmt.Sprintf("Opening Balance - %s - %s", in.Name, in.CurrencyCode),
+				Note:          fmt.Sprintf("Opening Balance - %s - %s", in.Name, resolvedCurrency),
 				Type:          utils.TransactionTypeOpeningBalance,
 			}
 			_, err = service.Transaction().CreateTransaction(ctx, txData, dbTx)
@@ -153,20 +169,14 @@ func (s *sAccount) CreateAccount(ctx context.Context, in model.AccountCreateInpu
 
 	// Invalidate cache for the new account
 	_ = utils.InvalidateCache(ctx, utils.AccountCacheKey(newId.String()))
+	dashboard.PublishDashboardRefresh(ctx, userId, "account_create")
 
 	return &e, nil
 }
 
 // GetAccount returns an account by ID with caching.
 func (s *sAccount) GetAccount(ctx context.Context, id uuid.UUID) (out *entity.Accounts, err error) {
-	return utils.GetOrLoad(
-		ctx,
-		utils.AccountCacheKey(id.String()),
-		utils.CacheTTL.Account,
-		func(ctx context.Context) (*entity.Accounts, error) {
-			return s.loadAccountFromDB(ctx, id)
-		},
-	)
+	return s.loadAccountFromDB(ctx, id)
 }
 
 // loadAccountFromDB fetches an account directly from the database with verification.
@@ -189,6 +199,12 @@ func (s *sAccount) UpdateAccount(ctx context.Context, id uuid.UUID, in model.Acc
 	if existing.UserId.String() != userId {
 		return nil, gerror.New("account does not belong to user")
 	}
+	if strings.TrimSpace(in.Name) == "" {
+		return nil, gerror.New("account name is required")
+	}
+	if err := validateAccountType(in.Type); err != nil {
+		return nil, err
+	}
 
 	// Restrict balance update for EXPENSE, INCOME, and EQUITY accounts
 	// These account types should only have their balances modified through transactions
@@ -196,45 +212,61 @@ func (s *sAccount) UpdateAccount(ctx context.Context, id uuid.UUID, in model.Acc
 		return nil, gerror.New("cannot manually update balance for " + gconv.String(existing.Type) + " accounts")
 	}
 
-	// Convert input to map to verify handling of zero values
-	data := gconv.Map(in)
-	if in.ParentId == uuid.Nil {
-		delete(data, "ParentId")
-	}
-	if in.DefaultChildId == uuid.Nil {
-		delete(data, "DefaultChildId")
-	}
-
-	// Prevent direct update of balance fields
-	delete(data, "BalanceUnits")
-	delete(data, "BalanceNanos")
-	delete(data, "BalanceDecimal")
-	delete(data, "CurrencyCode")
-
-	inBalanceUnits := 0
+	inBalanceUnits := int64(0)
 	if in.BalanceUnits != nil {
-		inBalanceUnits = int(*in.BalanceUnits)
+		inBalanceUnits = *in.BalanceUnits
 	}
 	inBalanceNanos := 0
 	if in.BalanceNanos != nil {
 		inBalanceNanos = int(*in.BalanceNanos)
 	}
 
-	inMoney := utils.NewMoneyFromUnitsAndNanos(int64(inBalanceUnits), int32(inBalanceNanos), existing.CurrencyCode)
+	inMoney := utils.NewMoneyFromUnitsAndNanos(inBalanceUnits, int32(inBalanceNanos), existing.CurrencyCode)
 	existsAccountMoney := utils.NewFromEntity(existing)
 
 	// Wrap in transaction
 	err = g.DB().Transaction(ctx, func(ctx context.Context, dbTx gdb.TX) error {
-		m := dao.Accounts.Ctx(ctx).Where(dao.Accounts.Columns().Id, id)
+		if accessErr := validateUserAccountHierarchyAccess(ctx, dbTx, existing.UserId, in.IsGroup, in.ParentId); accessErr != nil {
+			return accessErr
+		}
+		resolvedCurrency, currencyErr := resolveUserBaseCurrency(ctx, dbTx, existing.UserId, in.CurrencyCode)
+		if currencyErr != nil {
+			return currencyErr
+		}
+		if parentErr := validateParentAccount(ctx, dbTx, in.ParentId, existing.UserId, resolvedCurrency); parentErr != nil {
+			return parentErr
+		}
+
+		data := g.Map{
+			dao.Accounts.Columns().Name:     strings.TrimSpace(in.Name),
+			dao.Accounts.Columns().Type:     in.Type,
+			dao.Accounts.Columns().IsGroup:  in.IsGroup,
+			dao.Accounts.Columns().ParentId: nil,
+			dao.Accounts.Columns().Number:   in.Number,
+			dao.Accounts.Columns().Remarks:  in.Remarks,
+		}
+		if in.ParentId != uuid.Nil {
+			data[dao.Accounts.Columns().ParentId] = in.ParentId
+		}
+		if in.DefaultChildId != uuid.Nil {
+			data[dao.Accounts.Columns().DefaultChildId] = in.DefaultChildId
+		}
+		if strings.TrimSpace(in.Date) != "" {
+			data[dao.Accounts.Columns().Date] = gtime.NewFromStr(in.Date)
+		}
+
+		m := dbTx.Model(dao.Accounts.Table()).Where(dao.Accounts.Columns().Id, id)
 		if userId != "" {
 			m = m.Where(dao.Accounts.Columns().UserId, userId)
 		}
 		// Only update meta
-		if len(data) > 0 {
-			_, err := m.Data(data).Update()
-			if err != nil {
-				return gerror.Wrap(err, "failed to update account")
-			}
+		result, updateErr := m.Data(data).Update()
+		if updateErr != nil {
+			return gerror.Wrap(updateErr, "failed to update account")
+		}
+		rows, rowsErr := result.RowsAffected()
+		if rowsErr != nil || rows != 1 {
+			return gerror.New("account update did not affect exactly one row")
 		}
 
 		// If not update balance, return
@@ -287,96 +319,96 @@ func (s *sAccount) UpdateAccount(ctx context.Context, id uuid.UUID, in model.Acc
 
 	// Invalidate cache after update
 	_ = utils.InvalidateCache(ctx, utils.AccountCacheKey(id.String()))
+	dashboard.PublishDashboardRefresh(ctx, userId, "account_update")
 
 	return s.GetAccount(ctx, id)
 }
 
 func (s *sAccount) DeleteAccount(ctx context.Context, id uuid.UUID, migrationTargets map[string]uuid.UUID) (taskId string, err error) {
+	_ = migrationTargets
 	// Verify account exists and belongs to user
 	account, err := utils.GetAndVerify(ctx, utils.AccountAccessor, id)
 	if err != nil {
 		return "", gerror.Wrap(err, "failed to get account")
 	}
 
-	// Begin transaction
-	dbTx, err := g.DB().Begin(ctx)
-	if err != nil {
-		return "", gerror.Wrap(err, "failed to begin transaction")
-	}
-
-	defer func() {
-		if err != nil {
-			dbTx.Rollback()
-		} else {
-			dbTx.Commit()
-		}
-	}()
-
-	// Get child accounts if this is a group
 	var childAccountIds []uuid.UUID
-	if account.IsGroup {
-		err = dbTx.Model(dao.Accounts.Table()).
-			Fields(dao.Accounts.Columns().Id).
-			Where(dao.Accounts.Columns().ParentId, id).
-			Scan(&childAccountIds)
-		if err != nil {
-			return "", gerror.Wrap(err, "failed to get child accounts")
+	accountIds := []uuid.UUID{id}
+	err = g.DB().Transaction(ctx, func(ctx context.Context, dbTx gdb.TX) error {
+		if account.IsGroup {
+			scanErr := dbTx.Model(dao.Accounts.Table()).
+				Fields(dao.Accounts.Columns().Id).
+				Where(dao.Accounts.Columns().ParentId, id).
+				WhereNull(dao.Accounts.Columns().DeletedAt).
+				Scan(&childAccountIds)
+			if scanErr != nil {
+				return gerror.Wrap(scanErr, "failed to get child accounts")
+			}
 		}
-	}
-
-	// Check if account has transactions(with children accounts)
-	accountIds := append([]uuid.UUID{id}, childAccountIds...)
-	totalTxCount, err := dbTx.Model(dao.Transactions.Table()).
-		Where(fmt.Sprintf("%s IN(?) OR %s IN(?)",
-			dao.Transactions.Columns().FromAccountId,
-			dao.Transactions.Columns().ToAccountId),
-			accountIds, accountIds).
-		// Exclude note containing "Opening Balance"
-		WhereNotLike(dao.Transactions.Columns().Note, "%Opening Balance%").
-		Count()
-	if err != nil {
-		return "", gerror.Wrap(err, "failed to get transactions count")
-	}
-
-	// Scenario 1: No transactions - direct delete in transaction
-	if totalTxCount == 0 {
-		// No transactions - can delete directly
-		// Soft delete account
-		if err = directDeleteAccount(ctx, dbTx, *account, true); err != nil {
-			return "", gerror.Wrapf(err, "failed to delete account %s", account.Name)
+		accountIds = append(accountIds, childAccountIds...)
+		totalTxCount, countErr := dbTx.Model(dao.Transactions.Table()).
+			Where(fmt.Sprintf("%s IN(?) OR %s IN(?)",
+				dao.Transactions.Columns().FromAccountId,
+				dao.Transactions.Columns().ToAccountId),
+				accountIds, accountIds).
+			WhereNot(dao.Transactions.Columns().Type, utils.TransactionTypeOpeningBalance).
+			WhereNull(dao.Transactions.Columns().DeletedAt).
+			Count()
+		if countErr != nil {
+			return gerror.Wrap(countErr, "failed to get transactions count")
+		}
+		if totalTxCount != 0 {
+			return gerror.New("account with transactions cannot be deleted in beta")
 		}
 
-		// Invalidate cache for deleted account and its children
-		_ = utils.InvalidateCache(ctx, utils.AccountCacheKey(id.String()))
-		for _, childId := range childAccountIds {
-			_ = utils.InvalidateCache(ctx, utils.AccountCacheKey(childId.String()))
+		now := gtime.Now()
+		_, deleteTxErr := dbTx.Model(dao.Transactions.Table()).
+			Where(fmt.Sprintf("%s IN(?) OR %s IN(?)",
+				dao.Transactions.Columns().FromAccountId,
+				dao.Transactions.Columns().ToAccountId),
+				accountIds, accountIds).
+			Where(dao.Transactions.Columns().Type, utils.TransactionTypeOpeningBalance).
+			WhereNull(dao.Transactions.Columns().DeletedAt).
+			Data(g.Map{dao.Transactions.Columns().DeletedAt: now}).
+			Update()
+		if deleteTxErr != nil {
+			return gerror.Wrap(deleteTxErr, "failed to delete opening balance transactions")
 		}
 
-		return "", nil
-	}
+		_, equityErr := dbTx.Model(dao.Accounts.Table()).
+			WhereIn(dao.Accounts.Columns().EquityAccountId, accountIds).
+			Where(dao.Accounts.Columns().Type, utils.AccountTypeEquity).
+			WhereNull(dao.Accounts.Columns().DeletedAt).
+			Data(g.Map{dao.Accounts.Columns().DeletedAt: now}).
+			Update()
+		if equityErr != nil {
+			return gerror.Wrap(equityErr, "failed to delete opening balance equity accounts")
+		}
 
-	// Scenario 2: Has transactions - create migration task because of complexity
-	// migrationTargets is required in this situation
-	if len(migrationTargets) == 0 {
-		return "", gerror.New("migration targets are required")
-	}
-	payload := model.AccountMigrationPayload{
-		Payload:          &model.Payload{UserId: account.UserId},
-		AccountId:        id,
-		ChildAccountIds:  childAccountIds,
-		MigrationTargets: migrationTargets,
-	}
-
-	task, err := service.Task().CreateTask(ctx, model.TaskCreateInput[any]{
-		UserId:  account.UserId,
-		Type:    model.TaskTypeAccountMigration,
-		Payload: payload,
+		result, deleteAccountErr := dbTx.Model(dao.Accounts.Table()).
+			WhereIn(dao.Accounts.Columns().Id, accountIds).
+			Where(dao.Accounts.Columns().UserId, account.UserId).
+			WhereNull(dao.Accounts.Columns().DeletedAt).
+			Data(g.Map{dao.Accounts.Columns().DeletedAt: now}).
+			Update()
+		if deleteAccountErr != nil {
+			return gerror.Wrap(deleteAccountErr, "failed to delete account")
+		}
+		rows, rowsErr := result.RowsAffected()
+		if rowsErr != nil || rows != int64(len(accountIds)) {
+			return gerror.New("account delete did not affect the expected rows")
+		}
+		return nil
 	})
 	if err != nil {
-		return "", gerror.Wrap(err, "failed to create delete account task")
+		return "", err
 	}
 
-	return task.Id.String(), nil
+	for _, accountId := range accountIds {
+		_ = utils.InvalidateCache(ctx, utils.AccountCacheKey(accountId.String()))
+	}
+	dashboard.PublishDashboardRefresh(ctx, account.UserId.String(), "account_delete")
+	return "", nil
 }
 
 // GetAccountTransactionCount returns the number of transactions involving this account, and the number of transactions involving this account without equity
@@ -407,7 +439,7 @@ func (s *sAccount) GetAccountTransactionCount(ctx context.Context, id uuid.UUID)
 			dao.Transactions.Columns().ToAccountId),
 			id, id,
 		).
-		Where(dao.Transactions.Columns().DeletedAt + " IS NULL").
+		WhereNull(dao.Transactions.Columns().DeletedAt).
 		Scan(&result)
 
 	if err != nil {
@@ -425,7 +457,7 @@ func (s *sAccount) getOrCreateOpeningBalanceEquityAccountInTx(ctx context.Contex
 	err := dbTx.Model(dao.Accounts.Table()).
 		Where(dao.Accounts.Columns().EquityAccountId, sourceAccountId).
 		Where(dao.Accounts.Columns().Type, utils.AccountTypeEquity).
-		Where(dao.Accounts.Columns().DeletedAt + " IS NULL").
+		WhereNull(dao.Accounts.Columns().DeletedAt).
 		Scan(&existing)
 
 	if err != nil && err != sql.ErrNoRows {
@@ -483,35 +515,4 @@ func (s *sAccount) getOrCreateOpeningBalanceEquityAccountInTx(ctx context.Contex
 	}
 
 	return newId, nil
-}
-
-func directDeleteAccount(ctx context.Context, dbTx gdb.TX, account entity.Accounts, includeChildren bool) error {
-	return utils.SoftDelete(ctx, dbTx, utils.SoftDeleteOptions{
-		TableName:      dao.Accounts.Table(),
-		WhereCondition: dao.Accounts.Columns().Id,
-		WhereArgs:      []interface{}{account.Id},
-		// Casecase
-		CascadeFunc: func(ctx context.Context, tx gdb.TX) error {
-			if includeChildren && account.IsGroup {
-				_, err := tx.Model(dao.Accounts.Table()).
-					Where(dao.Accounts.Columns().ParentId, account.Id).
-					Data(g.Map{dao.Accounts.Columns().DeletedAt: gtime.Now()}).
-					Update()
-				if err != nil {
-					return err
-				}
-			}
-			// Also delete the linked equity account if present
-			if account.EquityAccountId != uuid.Nil {
-				_, err := tx.Model(dao.Accounts.Table()).
-					Where(dao.Accounts.Columns().Id, account.EquityAccountId).
-					Data(g.Map{dao.Accounts.Columns().DeletedAt: gtime.Now()}).
-					Update()
-				if err != nil {
-					return err
-				}
-			}
-			return nil
-		},
-	})
 }

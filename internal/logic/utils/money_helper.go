@@ -89,11 +89,9 @@ func (m *MoneyHelper) Sub(other *MoneyHelper) (*MoneyHelper, error) {
 	return &MoneyHelper{Decimal: newDec, Currency: m.Currency}, nil
 }
 
-// Mul (Use case: calculate interest)
-// multiplier is a float64 usually
-func (m *MoneyHelper) Mul(multiplier float64) *MoneyHelper {
-	mulDec := decimal.NewFromFloat(multiplier)
-	newDec := m.Decimal.Mul(mulDec)
+// Mul multiplies by an exact decimal value.
+func (m *MoneyHelper) Mul(multiplier decimal.Decimal) *MoneyHelper {
+	newDec := m.Decimal.Mul(multiplier)
 
 	return &MoneyHelper{Decimal: newDec, Currency: m.Currency}
 }
@@ -101,11 +99,9 @@ func (m *MoneyHelper) Mul(multiplier float64) *MoneyHelper {
 // Div (Use case: calculate interest)
 // Note: Division must specify the precision, here we default to 9 decimal places (matching Nanos)
 // Caution: It is dangerous to use division in financial systems (for example, 100 yuan / 3 people). In actual accounting scenarios, after division, there will often be "remainders". This requires a specialized **“Allocation Algorithm”**, not a simple Div.
-func (m *MoneyHelper) Div(divisor float64) *MoneyHelper {
-	divDec := decimal.NewFromFloat(divisor)
-
+func (m *MoneyHelper) Div(divisor decimal.Decimal) *MoneyHelper {
 	// DivRound(d, precision)
-	newDec := m.Decimal.DivRound(divDec, 9)
+	newDec := m.Decimal.DivRound(divisor, 9)
 
 	return &MoneyHelper{Decimal: newDec, Currency: m.Currency}
 }

@@ -128,7 +128,7 @@ func performBalanceSync(ctx context.Context) error {
 	for _, account := range accounts {
 		expectedMoney, err := calculateExpectedBalance(account.Id.String())
 		if err != nil {
-			g.Log().Warningf(ctx, "Failed to calculate balance for account %s: %v", account.Id, err)
+			g.Log().Warningf(ctx, "Failed to calculate an account balance: %v", err)
 			continue
 		}
 
@@ -136,17 +136,17 @@ func performBalanceSync(ctx context.Context) error {
 
 		// Check if balance needs update
 		if !accountMoney.Equals(expectedMoney) {
-			g.Log().Infof(ctx, "Account %s (%s): current=%s, expected=%s. Updating...",
-				account.Id, account.Name, accountMoney.Decimal, expectedMoney.Decimal)
-
 			// Update balance
 			expectedBalanceUnits, expectedBalanceNanos := expectedMoney.ToEntityValues()
 			_, err = g.DB().Model(dao.Accounts.Table()).
-				Where("id", account.Id).
-				Data(g.Map{"balance_units": expectedBalanceUnits, "balance_nanos": expectedBalanceNanos}).
+				Where(dao.Accounts.Columns().Id, account.Id).
+				Data(g.Map{
+					dao.Accounts.Columns().BalanceUnits: expectedBalanceUnits,
+					dao.Accounts.Columns().BalanceNanos: expectedBalanceNanos,
+				}).
 				Update()
 			if err != nil {
-				g.Log().Warningf(ctx, "Failed to update balance for account %s: %v", account.Id, err)
+				g.Log().Warningf(ctx, "Failed to update an account balance: %v", err)
 				continue
 			}
 			updatedCount++
@@ -251,38 +251,29 @@ func calculateExpectedBalance(accountId string) (*utils.MoneyHelper, error) {
 	return balance, nil
 }
 
-// WarmDashboardSnapshots pre-builds dashboard Redis snapshots for all users.
-// Called once at startup after balance sync to ensure first dashboard load is instant.
-// On cold start, it tries restoring from DB first (fast) and only falls back to
-// full recompute if no persisted snapshot exists.
+// WarmDashboardSnapshots rebuilds dashboard snapshots from transactional data.
+// Persisted snapshots are a recovery cache, not a source of truth: restoring them
+// blindly can resurrect data that predates the latest committed transaction.
 func WarmDashboardSnapshots(ctx context.Context) {
 	g.Log().Info(ctx, "Warming dashboard snapshots for all users...")
 
 	var users []struct {
 		Id string `orm:"id"`
 	}
-	err := g.DB().Model("users").Fields("id").Scan(&users)
+	err := dao.Users.Ctx(ctx).
+		Fields(dao.Users.Columns().Id).
+		WhereNull(dao.Users.Columns().DeletedAt).
+		Scan(&users)
 	if err != nil {
 		g.Log().Warningf(ctx, "Failed to query users for dashboard warmup: %v", err)
 		return
 	}
 
-	restoredCount := 0
-	rebuiltCount := 0
 	for _, u := range users {
-		// Try fast path: restore from DB snapshot
-		restored := dashboard.RestoreSnapshotsFromDB(ctx, u.Id)
-		if restored {
-			restoredCount++
-			continue
-		}
-		// Slow path: full recompute from transactional data
 		if err := dashboard.RebuildSnapshots(ctx, u.Id); err != nil {
 			g.Log().Warningf(ctx, "Failed to warm dashboard snapshot for user %s: %v", u.Id, err)
 		}
-		rebuiltCount++
 	}
 
-	g.Log().Infof(ctx, "Dashboard warmup completed: %d users (%d restored from DB, %d rebuilt)",
-		len(users), restoredCount, rebuiltCount)
+	g.Log().Infof(ctx, "Dashboard warmup completed: %d users rebuilt from source", len(users))
 }

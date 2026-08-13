@@ -63,6 +63,15 @@ type DashboardRefreshPayload struct {
 // Called after any transaction or account balance mutation.
 // It's fire-and-forget — dashboard still serves stale snapshot on failure.
 func PublishDashboardRefresh(ctx context.Context, userId string, reason string) {
+	// Remove both cache tiers before publishing. An immediate dashboard read
+	// must not restore a stale persisted snapshot while the worker is debouncing.
+	invalidateDashboardSnapshots(ctx, userId)
+
+	client := mq.GetRabbitMQ()
+	if !client.IsConnected() {
+		return
+	}
+
 	payload := DashboardRefreshPayload{
 		UserId: userId,
 		Reason: reason,
@@ -78,14 +87,21 @@ func PublishDashboardRefresh(ctx context.Context, userId string, reason string) 
 		Payload: payloadBytes,
 	}
 
-	if err := mq.GetRabbitMQ().Publish(ctx, mq.QueueDashboard, msg); err != nil {
+	if err := client.Publish(ctx, mq.QueueDashboard, msg); err != nil {
 		g.Log().Warningf(ctx, "Failed to publish dashboard refresh (will recalculate on next request): %v", err)
-		// Fallback: invalidate snapshot cache so next request triggers a fresh DB load
-		_ = utils.InvalidateCache(ctx,
-			summarySnapshotKey(userId),
-			monthlySnapshotKey(userId),
-			trendSnapshotKey(userId),
-		)
+	}
+}
+
+func invalidateDashboardSnapshots(ctx context.Context, userId string) {
+	_ = utils.InvalidateCache(ctx,
+		summarySnapshotKey(userId),
+		monthlySnapshotKey(userId),
+		trendSnapshotKey(userId),
+	)
+	if _, err := dao.DashboardSnapshots.Ctx(ctx).
+		Where(dao.DashboardSnapshots.Columns().UserId, userId).
+		Delete(); err != nil {
+		g.Log().Warningf(ctx, "Failed to invalidate persisted dashboard snapshots for user %s: %v", userId, err)
 	}
 }
 
@@ -250,10 +266,10 @@ func getOrBuildSnapshot[T any](
 	if err == nil && !cached.IsNil() {
 		var result T
 		if jsonErr := json.Unmarshal(cached.Bytes(), &result); jsonErr == nil {
-			g.Log().Debugf(ctx, "Snapshot HIT (Redis): %s", key)
+			g.Log().Debug(ctx, "Dashboard snapshot cache hit")
 			return &result, nil
 		}
-		g.Log().Warningf(ctx, "Snapshot unmarshal failed for key %s, trying DB", key)
+		g.Log().Warning(ctx, "Dashboard snapshot cache decode failed, trying database")
 	}
 
 	// 2nd: Try read from DB
@@ -273,7 +289,7 @@ func getOrBuildSnapshot[T any](
 	}
 
 	// 3rd: Full recompute from transactional data
-	g.Log().Debugf(ctx, "Snapshot MISS (Redis+DB): %s, computing from source", key)
+	g.Log().Debug(ctx, "Dashboard snapshot cache miss, computing from source")
 	result, err := loader(ctx)
 	if err != nil {
 		return nil, err

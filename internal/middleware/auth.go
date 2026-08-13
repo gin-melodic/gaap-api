@@ -18,6 +18,8 @@ type ContextKey string
 const (
 	// UserIdKey is the context key for storing user ID
 	UserIdKey ContextKey = "userId"
+	// SessionIdKey identifies the browser/device ALE session.
+	SessionIdKey ContextKey = "sessionId"
 )
 
 // getJwtSecret returns the JWT secret from environment variables or configuration
@@ -32,12 +34,14 @@ func getJwtSecret(ctx context.Context) []byte {
 
 // AuthMiddleware validates JWT token and injects userId into context
 func AuthMiddleware(r *ghttp.Request) {
+	reject := func(status int, message string) {
+		writeProtoError(r, status, message, r.GetCtxVar("ale_key").String())
+	}
 	// Skip auth for public auth routes (login, register, refresh-token, logout)
 	publicPaths := map[string]bool{
 		"/v1/auth/login":         true,
 		"/v1/auth/register":            true,
 		"/v1/auth/refresh-token":       true,
-		"/v1/auth/logout":              true,
 		"/v1/auth/get-currency-list":   true,
 	}
 	if publicPaths[r.URL.Path] {
@@ -48,19 +52,13 @@ func AuthMiddleware(r *ghttp.Request) {
 	// Get Authorization header
 	authHeader := r.GetHeader("Authorization")
 	if authHeader == "" {
-		r.Response.WriteJsonExit(g.Map{
-			"code":    401,
-			"message": "Authorization header required",
-		})
+		reject(401, "authorization required")
 		return
 	}
 
 	// Check Bearer prefix
 	if !strings.HasPrefix(authHeader, "Bearer ") {
-		r.Response.WriteJsonExit(g.Map{
-			"code":    401,
-			"message": "Invalid authorization format, expected Bearer token",
-		})
+		reject(401, "invalid authorization format")
 		return
 	}
 
@@ -69,10 +67,7 @@ func AuthMiddleware(r *ghttp.Request) {
 
 	// Check if token is blacklisted
 	if service.Auth().IsTokenBlacklisted(r.Context(), tokenString) {
-		r.Response.WriteJsonExit(g.Map{
-			"code":    401,
-			"message": "Token has been revoked",
-		})
+		reject(401, "token has been revoked")
 		return
 	}
 
@@ -86,45 +81,40 @@ func AuthMiddleware(r *ghttp.Request) {
 	})
 
 	if err != nil || !token.Valid {
-		r.Response.WriteJsonExit(g.Map{
-			"code":    401,
-			"message": "Invalid or expired token",
-		})
+		reject(401, "invalid or expired token")
 		return
 	}
 
 	// Extract claims
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		r.Response.WriteJsonExit(g.Map{
-			"code":    401,
-			"message": "Invalid token claims",
-		})
+		reject(401, "invalid token claims")
 		return
 	}
 
 	// Check token type (must be access token)
 	tokenType, _ := claims["type"].(string)
 	if tokenType != "" && tokenType != "access" {
-		r.Response.WriteJsonExit(g.Map{
-			"code":    401,
-			"message": "Invalid token type, access token required",
-		})
+		reject(401, "access token required")
 		return
 	}
 
 	// Get userId from claims
 	userId, ok := claims["userId"].(string)
 	if !ok || userId == "" {
-		r.Response.WriteJsonExit(g.Map{
-			"code":    401,
-			"message": "Invalid token: missing userId",
-		})
+		reject(401, "invalid token claims")
+		return
+	}
+
+	sessionId, ok := claims["sid"].(string)
+	if !ok || sessionId == "" {
+		reject(401, "invalid token session")
 		return
 	}
 
 	// Inject userId into context
 	ctx := context.WithValue(r.Context(), UserIdKey, userId)
+	ctx = context.WithValue(ctx, SessionIdKey, sessionId)
 	r.SetCtx(ctx)
 
 	// Continue to next handler
