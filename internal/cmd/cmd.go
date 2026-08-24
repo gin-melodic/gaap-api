@@ -18,6 +18,7 @@ import (
 	"gaap-api/internal/controller/transaction"
 	"gaap-api/internal/controller/user"
 	"gaap-api/internal/middleware"
+	"gaap-api/internal/service"
 	"gaap-api/internal/ws"
 )
 
@@ -40,7 +41,6 @@ var (
 			if err := boot.InitRabbitMQ(ctx); err != nil {
 				return err
 			}
-
 			// Initialize ALE (Application Layer Encryption)
 			if err := boot.InitALE(ctx); err != nil {
 				return err
@@ -50,6 +50,9 @@ var (
 			// be silently rewritten during startup. Rebuild derived dashboard data
 			// from the persisted source records instead.
 			boot.WarmDashboardSnapshots(ctx)
+			if err := service.DemoData().StartScheduler(ctx); err != nil {
+				return err
+			}
 
 			s := g.Server()
 			s.BindHandler("/v1/health/live", health.Live)

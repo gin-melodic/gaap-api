@@ -25,7 +25,7 @@ func (c *ControllerV1) GfGetBalanceTrend(ctx context.Context, req *v1.GfGetBalan
 		}
 	}
 
-	balances, err := service.Dashboard().GetBalanceTrend(ctx, accountIds)
+	balances, err := service.Dashboard().GetBalanceTrend(ctx, accountIds, req.StartDate, req.EndDate)
 	if err != nil {
 		return nil, err
 	}
