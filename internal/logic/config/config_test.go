@@ -23,7 +23,7 @@ func Test_Config_Currencies(t *testing.T) {
 		// code + deleted_at = 2 args
 		// gdb uses RETURNING code because it's PK
 		mock.ExpectQuery("INSERT INTO \"?currencies\"?").
-			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnRows(sqlmock.NewRows([]string{"code"}).AddRow("CNY"))
 
 		// Expectation for AddCurrency (List after insert)

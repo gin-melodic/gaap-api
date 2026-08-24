@@ -10,7 +10,7 @@ import (
 
 // AccountTypes is the golang structure for table account_types.
 type AccountTypes struct {
-	Type      string      `json:"type"      orm:"type"       description:""` //
+	Type      int         `json:"type"      orm:"type"       description:""` //
 	Label     string      `json:"label"     orm:"label"      description:""` //
 	Color     string      `json:"color"     orm:"color"      description:""` //
 	Bg        string      `json:"bg"        orm:"bg"         description:""` //

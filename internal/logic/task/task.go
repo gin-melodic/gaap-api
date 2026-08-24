@@ -3,19 +3,19 @@ package task
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"gaap-api/internal/dao"
-	"gaap-api/internal/middleware"
+	"gaap-api/internal/logic/utils"
 	"gaap-api/internal/model"
 	"gaap-api/internal/model/entity"
 	"gaap-api/internal/mq"
 	"gaap-api/internal/service"
 	"gaap-api/internal/ws"
 
-	"github.com/gogf/gf/v2/database/gdb"
+	"github.com/gogf/gf/v2/errors/gerror"
 	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/os/gtime"
+	"github.com/google/uuid"
 )
 
 type sTask struct{}
@@ -29,29 +29,29 @@ func New() *sTask {
 }
 
 // ListTasks returns a list of tasks for the current user
-func (s *sTask) ListTasks(ctx context.Context, in model.TaskQueryInput) (out []model.Task, total int, err error) {
-	userId, _ := ctx.Value(middleware.UserIdKey).(string)
+func (s *sTask) ListTasks(ctx context.Context, in model.TaskQueryInput) (out []model.TaskOutput[any, any], total int, err error) {
+	userId := utils.RequireUserId(ctx)
 
 	m := dao.Tasks.Ctx(ctx)
 	if userId != "" {
-		m = m.Where("user_id", userId)
+		m = m.Where(dao.Tasks.Columns().UserId, userId)
 	}
-	if in.Status != "" {
-		m = m.Where("status", in.Status)
+	if in.Status != 0 {
+		m = m.Where(dao.Tasks.Columns().Status, in.Status)
 	}
-	if in.Type != "" {
-		m = m.Where("type", in.Type)
+	if in.Type != 0 {
+		m = m.Where(dao.Tasks.Columns().Type, in.Type)
 	}
 
 	total, err = m.Count()
 	if err != nil {
-		return
+		return nil, 0, gerror.Wrap(err, "failed to count tasks")
 	}
 
 	var entities []entity.Tasks
 	err = m.Order("created_at DESC").Page(in.Page, in.Limit).Scan(&entities)
 	if err != nil {
-		return
+		return nil, 0, gerror.Wrap(err, "failed to list tasks")
 	}
 
 	for _, e := range entities {
@@ -61,95 +61,121 @@ func (s *sTask) ListTasks(ctx context.Context, in model.TaskQueryInput) (out []m
 	return
 }
 
-// GetTask returns a single task by ID
-func (s *sTask) GetTask(ctx context.Context, id string) (out *model.Task, err error) {
-	userId, _ := ctx.Value(middleware.UserIdKey).(string)
+// GetTask returns a single task by ID with caching.
+func (s *sTask) GetTask(ctx context.Context, id uuid.UUID) (out *model.TaskOutput[any, any], err error) {
+	userId := utils.RequireUserId(ctx)
 
+	return utils.GetOrLoad(
+		ctx,
+		utils.TaskCacheKey(id.String()),
+		utils.CacheTTL.Task,
+		func(ctx context.Context) (*model.TaskOutput[any, any], error) {
+			return s.loadTaskFromDB(ctx, id, userId)
+		},
+	)
+}
+
+// loadTaskFromDB fetches a task directly from the database.
+func (s *sTask) loadTaskFromDB(ctx context.Context, id uuid.UUID, userId string) (*model.TaskOutput[any, any], error) {
 	var e entity.Tasks
-	m := dao.Tasks.Ctx(ctx).Where("id", id)
+	m := dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, id)
 	if userId != "" {
-		m = m.Where("user_id", userId)
+		m = m.Where(dao.Tasks.Columns().UserId, userId)
 	}
-	err = m.Scan(&e)
+	err := m.Scan(&e)
 	if err != nil {
-		return
+		return nil, gerror.Wrap(err, "failed to get task")
 	}
-	if e.Id == "" {
-		return nil, fmt.Errorf("task not found")
+	if e.Id == uuid.Nil {
+		return nil, gerror.New("task not found")
 	}
 	return s.entityToModel(&e), nil
 }
 
 // CreateTask creates a new task and publishes it to the queue
-func (s *sTask) CreateTask(ctx context.Context, in model.TaskCreateInput) (out *model.Task, err error) {
+func (s *sTask) CreateTask(ctx context.Context, in model.TaskCreateInput[any]) (out *model.TaskOutput[any, any], err error) {
 	// Check if RabbitMQ is connected before proceeding
 	rabbit := mq.GetRabbitMQ()
-	fmt.Printf("CreateTask: RabbitMQ type: %T, IsConnected: %v\n", rabbit, rabbit.IsConnected())
+	g.Log().Debugf(ctx, "CreateTask: RabbitMQ type: %T, IsConnected: %v", rabbit, rabbit.IsConnected())
 	if !rabbit.IsConnected() {
-		return nil, fmt.Errorf("task queue is not available, please try again later")
+		return nil, gerror.New("task queue is not available, please try again later")
 	}
 
 	payloadBytes, err := json.Marshal(in.Payload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal payload: %w", err)
+		return nil, gerror.Wrap(err, "failed to marshal payload")
 	}
 
-	// Use Raw SQL with RETURNING to get the UUID
-	var taskId string
-	sql := `INSERT INTO tasks (user_id, type, status, payload) VALUES ($1, $2, $3, $4) RETURNING id`
-	result, err := g.DB().GetOne(ctx, sql, in.UserId, in.Type, model.TaskStatusPending, string(payloadBytes))
+	// Generate UUID7 for the new task
+	taskId, err := uuid.NewV7()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create task: %w", err)
+		return nil, gerror.Wrap(err, "failed to generate UUID7 for new task")
 	}
-	taskId = result["id"].String()
+
+	_, err = dao.Tasks.Ctx(ctx).Data(g.Map{
+		dao.Tasks.Columns().Id:      taskId,
+		dao.Tasks.Columns().UserId:  in.UserId,
+		dao.Tasks.Columns().Type:    in.Type,
+		dao.Tasks.Columns().Status:  model.TaskStatusPending,
+		dao.Tasks.Columns().Payload: payloadBytes,
+	}).Insert()
+	if err != nil {
+		return nil, gerror.Wrap(err, "failed to create task")
+	}
 
 	g.Log().Infof(ctx, "Created task with ID: %s", taskId)
 
 	// Publish to RabbitMQ
-	msg := &mq.Message{
-		Type:    in.Type,
-		Payload: payloadBytes,
-	}
-	// Add task ID to payload for worker
 	msgPayload := g.Map{
-		"taskId":  taskId,
+		"taskId":  taskId.String(),
 		"payload": in.Payload,
 	}
-	msg.Payload, _ = json.Marshal(msgPayload)
+	msgBytes, _ := json.Marshal(msgPayload)
+	msg := &mq.Message{
+		Type:    in.Type,
+		Payload: msgBytes,
+	}
 
 	if err := mq.GetRabbitMQ().Publish(ctx, mq.QueueTasks, msg); err != nil {
 		// Mark task as failed with the error reason
-		failErr := fmt.Sprintf("failed to publish to queue: %v", err)
-		s.FailTask(ctx, taskId, failErr)
-		return nil, fmt.Errorf("failed to publish task to queue: %w", err)
+		failErr := gerror.Newf("failed to publish to queue: %v", err)
+		s.FailTask(ctx, taskId, failErr.Error())
+		return nil, gerror.Wrap(err, "failed to publish task to queue")
 	}
 
 	return s.GetTask(ctx, taskId)
 }
 
 // CancelTask cancels a pending or running task
-func (s *sTask) CancelTask(ctx context.Context, id string) error {
-	userId, _ := ctx.Value(middleware.UserIdKey).(string)
+func (s *sTask) CancelTask(ctx context.Context, id uuid.UUID) error {
+	userId := utils.RequireUserId(ctx)
 
-	m := dao.Tasks.Ctx(ctx).Where("id", id)
+	m := dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, id)
 	if userId != "" {
-		m = m.Where("user_id", userId)
+		m = m.Where(dao.Tasks.Columns().UserId, userId)
 	}
 
 	// Only allow cancelling pending or running tasks
-	m = m.WhereIn("status", []string{model.TaskStatusPending, model.TaskStatusRunning})
+	m = m.WhereIn(dao.Tasks.Columns().Status, []int{model.TaskStatusPending, model.TaskStatusRunning})
 
 	_, err := m.Data(g.Map{
-		"status":       model.TaskStatusCancelled,
-		"completed_at": gtime.Now(),
+		dao.Tasks.Columns().Status:      model.TaskStatusCancelled,
+		dao.Tasks.Columns().CompletedAt: gtime.Now(),
 	}).Update()
 
-	return err
+	if err != nil {
+		return gerror.Wrap(err, "failed to cancel task")
+	}
+
+	// Invalidate cache after status change
+	_ = utils.InvalidateCache(ctx, utils.TaskCacheKey(id.String()))
+
+	return nil
 }
 
 // RetryTask retries a failed task
-func (s *sTask) RetryTask(ctx context.Context, id string) (*model.Task, error) {
-	userId, _ := ctx.Value(middleware.UserIdKey).(string)
+func (s *sTask) RetryTask(ctx context.Context, id uuid.UUID) (*model.TaskOutput[any, any], error) {
+	userId := utils.RequireUserId(ctx)
 
 	// Get the failed task
 	task, err := s.GetTask(ctx, id)
@@ -157,36 +183,35 @@ func (s *sTask) RetryTask(ctx context.Context, id string) (*model.Task, error) {
 		return nil, err
 	}
 	if task == nil {
-		return nil, fmt.Errorf("task not found")
+		return nil, gerror.New("task not found")
 	}
-	if task.UserId != userId {
-		return nil, fmt.Errorf("task not found")
+	if task.UserId.String() != userId {
+		return nil, gerror.New("task not found")
 	}
 	if task.Status != model.TaskStatusFailed {
-		return nil, fmt.Errorf("only failed tasks can be retried")
+		return nil, gerror.New("only failed tasks can be retried")
 	}
 
 	// Check if RabbitMQ is connected
 	if !mq.GetRabbitMQ().IsConnected() {
-		return nil, fmt.Errorf("task queue is not available, please try again later")
+		return nil, gerror.New("task queue is not available, please try again later")
 	}
 
-	// Reset task status to pending
-	_, err = dao.Tasks.Ctx(ctx).Where("id", id).Data(g.Map{
-		"status":          model.TaskStatusPending,
-		"progress":        0,
-		"processed_items": 0,
-		"result":          nil,
-		"started_at":      nil,
-		"completed_at":    nil,
+	_, err = dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, id).Data(g.Map{
+		dao.Tasks.Columns().Status:         model.TaskStatusPending,
+		dao.Tasks.Columns().Progress:       0,
+		dao.Tasks.Columns().ProcessedItems: 0,
 	}).Update()
 	if err != nil {
-		return nil, fmt.Errorf("failed to reset task: %w", err)
+		return nil, gerror.Wrap(err, "failed to reset task")
 	}
+
+	// Invalidate cache after status change
+	_ = utils.InvalidateCache(ctx, utils.TaskCacheKey(id.String()))
 
 	// Re-publish to RabbitMQ
 	msgPayload := g.Map{
-		"taskId":  id,
+		"taskId":  id.String(),
 		"payload": task.Payload,
 	}
 	msgBytes, _ := json.Marshal(msgPayload)
@@ -197,8 +222,8 @@ func (s *sTask) RetryTask(ctx context.Context, id string) (*model.Task, error) {
 
 	if err := mq.GetRabbitMQ().Publish(ctx, mq.QueueTasks, msg); err != nil {
 		// Mark task as failed again
-		s.FailTask(ctx, id, fmt.Sprintf("failed to republish to queue: %v", err))
-		return nil, fmt.Errorf("failed to retry task: %w", err)
+		s.FailTask(ctx, id, gerror.Newf("failed to republish to queue: %v", err).Error())
+		return nil, gerror.Wrap(err, "failed to retry task")
 	}
 
 	g.Log().Infof(ctx, "Retried task with ID: %s", id)
@@ -206,26 +231,36 @@ func (s *sTask) RetryTask(ctx context.Context, id string) (*model.Task, error) {
 }
 
 // UpdateTaskProgress updates task progress
-func (s *sTask) UpdateTaskProgress(ctx context.Context, id string, progress int, processedItems int) error {
-	_, err := dao.Tasks.Ctx(ctx).Where("id", id).Data(g.Map{
-		"progress":        progress,
-		"processed_items": processedItems,
+func (s *sTask) UpdateTaskProgress(ctx context.Context, id uuid.UUID, progress int, processedItems int) error {
+	_, err := dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, id).Data(g.Map{
+		dao.Tasks.Columns().Progress:       progress,
+		dao.Tasks.Columns().ProcessedItems: processedItems,
 	}).Update()
-	return err
+	if err != nil {
+		return gerror.Wrap(err, "failed to update task progress")
+	}
+
+	// Invalidate cache after progress update
+	_ = utils.InvalidateCache(ctx, utils.TaskCacheKey(id.String()))
+
+	return nil
 }
 
 // CompleteTask marks a task as completed
-func (s *sTask) CompleteTask(ctx context.Context, id string, result interface{}) error {
+func (s *sTask) CompleteTask(ctx context.Context, id uuid.UUID, result interface{}) error {
 	resultBytes, _ := json.Marshal(result)
-	_, err := dao.Tasks.Ctx(ctx).Where("id", id).Data(g.Map{
-		"status":       model.TaskStatusCompleted,
-		"progress":     100,
-		"result":       string(resultBytes),
-		"completed_at": gtime.Now(),
+	_, err := dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, id).Data(g.Map{
+		dao.Tasks.Columns().Status:      model.TaskStatusCompleted,
+		dao.Tasks.Columns().Progress:    100,
+		dao.Tasks.Columns().Result:      resultBytes,
+		dao.Tasks.Columns().CompletedAt: gtime.Now(),
 	}).Update()
 	if err != nil {
-		return err
+		return gerror.Wrap(err, "failed to complete task")
 	}
+
+	// Invalidate cache after status change
+	_ = utils.InvalidateCache(ctx, utils.TaskCacheKey(id.String()))
 
 	// Broadcast task update via WebSocket
 	s.broadcastTaskUpdate(ctx, id, model.TaskStatusCompleted, result)
@@ -233,17 +268,20 @@ func (s *sTask) CompleteTask(ctx context.Context, id string, result interface{})
 }
 
 // FailTask marks a task as failed
-func (s *sTask) FailTask(ctx context.Context, id string, errMsg string) error {
+func (s *sTask) FailTask(ctx context.Context, id uuid.UUID, errMsg string) error {
 	result := model.AccountMigrationResult{Error: errMsg}
 	resultBytes, _ := json.Marshal(result)
-	_, err := dao.Tasks.Ctx(ctx).Where("id", id).Data(g.Map{
-		"status":       model.TaskStatusFailed,
-		"result":       string(resultBytes),
-		"completed_at": gtime.Now(),
+	_, err := dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, id).Data(g.Map{
+		dao.Tasks.Columns().Status:      model.TaskStatusFailed,
+		dao.Tasks.Columns().Result:      resultBytes,
+		dao.Tasks.Columns().CompletedAt: gtime.Now(),
 	}).Update()
 	if err != nil {
-		return err
+		return gerror.Wrap(err, "failed to mark task as failed")
 	}
+
+	// Invalidate cache after status change
+	_ = utils.InvalidateCache(ctx, utils.TaskCacheKey(id.String()))
 
 	// Broadcast task update via WebSocket
 	s.broadcastTaskUpdate(ctx, id, model.TaskStatusFailed, result)
@@ -251,7 +289,7 @@ func (s *sTask) FailTask(ctx context.Context, id string, errMsg string) error {
 }
 
 // broadcastTaskUpdate sends task status update to user via WebSocket
-func (s *sTask) broadcastTaskUpdate(ctx context.Context, taskId string, status string, result interface{}) {
+func (s *sTask) broadcastTaskUpdate(ctx context.Context, taskId uuid.UUID, status model.TaskStatus, result interface{}) {
 	task, err := s.GetTask(ctx, taskId)
 	if err != nil || task == nil {
 		g.Log().Warningf(ctx, "Failed to get task for WebSocket broadcast: %v", err)
@@ -261,15 +299,15 @@ func (s *sTask) broadcastTaskUpdate(ctx context.Context, taskId string, status s
 	msg := &ws.Message{
 		Type: ws.MessageTypeTaskUpdate,
 		Payload: ws.TaskUpdatePayload{
-			TaskId:   taskId,
+			TaskId:   taskId.String(),
 			Status:   status,
 			TaskType: task.Type,
 			Result:   result,
 		},
 	}
 
-	ws.GetHub().SendToUser(task.UserId, msg)
-	g.Log().Infof(ctx, "Broadcasted task update via WebSocket: taskId=%s, status=%s, userId=%s", taskId, status, task.UserId)
+	ws.GetHub().SendToUser(task.UserId.String(), msg)
+	g.Log().Infof(ctx, "Broadcasted task update via WebSocket: taskId=%s, status=%d, userId=%s", taskId, status, task.UserId)
 }
 
 // StartWorker starts the background task worker
@@ -278,156 +316,19 @@ func (s *sTask) StartWorker(ctx context.Context) error {
 		switch msg.Type {
 		case model.TaskTypeAccountMigration:
 			return s.processAccountMigration(ctx, msg.Payload)
+		case model.TaskTypeDataExport:
+			return s.processDataExport(ctx, msg.Payload)
+		case model.TaskTypeDataImport:
+			return s.processDataImport(ctx, msg.Payload)
 		default:
-			g.Log().Warningf(ctx, "Unknown task type: %s", msg.Type)
+			g.Log().Warningf(ctx, "Unknown task type: %d", msg.Type)
 			return nil
 		}
 	})
 }
 
-// processAccountMigration handles account migration task
-func (s *sTask) processAccountMigration(ctx context.Context, payload json.RawMessage) error {
-	var data struct {
-		TaskId  string                        `json:"taskId"`
-		Payload model.AccountMigrationPayload `json:"payload"`
-	}
-	if err := json.Unmarshal(payload, &data); err != nil {
-		return fmt.Errorf("failed to unmarshal payload: %w", err)
-	}
-
-	taskId := data.TaskId
-	migrationPayload := data.Payload
-
-	// Update task status to running
-	_, err := dao.Tasks.Ctx(ctx).Where("id", taskId).Data(g.Map{
-		"status":     model.TaskStatusRunning,
-		"started_at": gtime.Now(),
-	}).Update()
-	if err != nil {
-		return err
-	}
-
-	// Check if task was cancelled
-	task, err := s.GetTask(ctx, taskId)
-	if err != nil || task.Status == model.TaskStatusCancelled {
-		return nil
-	}
-
-	// Execute migration in transaction
-	result := model.AccountMigrationResult{}
-	err = g.DB().Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
-		return s.executeMigration(ctx, tx, taskId, &migrationPayload, &result)
-	})
-
-	if err != nil {
-		s.FailTask(ctx, taskId, err.Error())
-		return err
-	}
-
-	return s.CompleteTask(ctx, taskId, result)
-}
-
-// executeMigration performs the actual migration within a transaction
-func (s *sTask) executeMigration(ctx context.Context, tx gdb.TX, taskId string, payload *model.AccountMigrationPayload, result *model.AccountMigrationResult) error {
-	accountIds := append([]string{payload.AccountId}, payload.ChildAccountIds...)
-	batchSize := 500
-
-	// Count total transactions to migrate
-	var totalCount int
-	for _, accId := range accountIds {
-		count, _ := tx.Model("transactions").
-			Where("from_account_id = ? OR to_account_id = ?", accId, accId).
-			Count()
-		totalCount += count
-	}
-
-	// Update total items
-	tx.Model("tasks").Where("id", taskId).Data(g.Map{"total_items": totalCount}).Update()
-
-	processed := 0
-
-	// Migrate transactions for each account
-	for _, accId := range accountIds {
-		// Get account currency
-		var acc entity.Accounts
-		tx.Model("accounts").Where("id", accId).Scan(&acc)
-
-		targetId := payload.MigrationTargets[acc.Currency]
-		if targetId == "" {
-			continue
-		}
-
-		// Update from_account_id
-		fromResult, err := tx.Model("transactions").
-			Where("from_account_id", accId).
-			Data(g.Map{"from_account_id": targetId}).
-			Update()
-		if err != nil {
-			return err
-		}
-		fromCount, _ := fromResult.RowsAffected()
-		result.TransactionsMigrated += int(fromCount)
-
-		// Update to_account_id
-		toResult, err := tx.Model("transactions").
-			Where("to_account_id", accId).
-			Data(g.Map{"to_account_id": targetId}).
-			Update()
-		if err != nil {
-			return err
-		}
-		toCount, _ := toResult.RowsAffected()
-		result.TransactionsMigrated += int(toCount)
-
-		// Merge balance
-		_, err = tx.Model("accounts").
-			Where("id", targetId).
-			Data(gdb.Raw(fmt.Sprintf("balance = balance + %f", acc.Balance))).
-			Update()
-		if err != nil {
-			return err
-		}
-		result.BalancesMerged++
-
-		// Soft delete account
-		_, err = tx.Model("accounts").
-			Where("id", accId).
-			Data(g.Map{"deleted_at": gtime.Now()}).
-			Update()
-		if err != nil {
-			return err
-		}
-		result.AccountsDeleted++
-
-		// Update progress
-		processed += int(fromCount) + int(toCount)
-		progress := 0
-		if totalCount > 0 {
-			progress = (processed * 100) / totalCount
-		}
-		tx.Model("tasks").Where("id", taskId).Data(g.Map{
-			"progress":        progress,
-			"processed_items": processed,
-		}).Update()
-
-		// Check for cancellation periodically
-		var taskStatus string
-		tx.Model("tasks").Where("id", taskId).Fields("status").Scan(&taskStatus)
-		if taskStatus == model.TaskStatusCancelled {
-			return fmt.Errorf("task cancelled by user")
-		}
-
-		// Small batch delay to prevent overwhelming
-		if processed%batchSize == 0 {
-			g.Log().Debugf(ctx, "Migration progress: %d/%d", processed, totalCount)
-		}
-	}
-
-	return nil
-}
-
 // entityToModel converts entity to model
-func (s *sTask) entityToModel(e *entity.Tasks) *model.Task {
+func (s *sTask) entityToModel(e *entity.Tasks) *model.TaskOutput[any, any] {
 	var payload interface{}
 	var result interface{}
 	json.Unmarshal([]byte(e.Payload), &payload)
@@ -435,7 +336,7 @@ func (s *sTask) entityToModel(e *entity.Tasks) *model.Task {
 		json.Unmarshal([]byte(e.Result), &result)
 	}
 
-	return &model.Task{
+	return &model.TaskOutput[any, any]{
 		Id:             e.Id,
 		UserId:         e.UserId,
 		Type:           e.Type,

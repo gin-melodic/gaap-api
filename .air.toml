@@ -1,0 +1,31 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "cmd /c hack\\build_dev.bat"
+  bin = "tmp/main.exe"
+  full_bin = "dlv.exe --accept-multiclient --headless --listen=:2345 --api-version=2 exec --continue tmp\\main"
+  include_ext = ["go", "yaml", "toml", "ini", "json"]
+  exclude_dir = ["tmp", "vendor", "testdata", ".git"]
+  include_dir = []
+  exclude_file = []
+  delay = 1000
+  stop_on_error = true
+  send_interrupt = false
+  kill_delay = 2000
+
+[log]
+  time = true
+  main = true
+  watcher = true
+  build = true
+  runner = true
+
+[color]
+  main = "magenta"
+  watcher = "cyan"
+  build = "yellow"
+  runner = "green"
+
+[misc]
+  clean_on_exit = true

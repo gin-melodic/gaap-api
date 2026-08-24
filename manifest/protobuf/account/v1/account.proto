@@ -1,0 +1,131 @@
+syntax = "proto3";
+
+package account.v1;
+
+option go_package = "gaap-api/api/account/v1;v1";
+
+import "google/protobuf/timestamp.proto";
+import "base/base.proto";
+
+service AccountService {
+  // List all accounts
+  rpc ListAccounts(ListAccountsReq) returns (ListAccountsRes);
+  
+  // Create a new account
+  rpc CreateAccount(CreateAccountReq) returns (CreateAccountRes);
+  
+  // Get account details
+  rpc GetAccount(GetAccountReq) returns (GetAccountRes);
+  
+  // Update account
+  rpc UpdateAccount(UpdateAccountReq) returns (UpdateAccountRes);
+  
+  // Delete account with optional migration
+  rpc DeleteAccount(DeleteAccountReq) returns (DeleteAccountRes);
+  
+  // Get transaction count for account
+  rpc GetAccountTransactionCount(GetAccountTransactionCountReq) returns (GetAccountTransactionCountRes);
+}
+
+message Account {
+  string id = 1;
+  optional string parent_id = 2;
+  string name = 3;
+  base.AccountType type = 4;
+  bool is_group = 5;
+  
+  // Replaced float64 with Money
+  base.Money balance = 6;
+  
+  optional string default_child_id = 7;
+  // ISO 8601 Date string
+  string date = 8;
+  string number = 9;
+  string remarks = 10;
+  
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+  string opening_voucher_id = 13;
+  optional string equity_account_id = 14;
+}
+
+message AccountInput {
+  optional string parent_id = 1;
+  string name = 2;
+  base.AccountType type = 3;
+  bool is_group = 4;
+  
+  // Replaced float64 with Money
+  base.Money balance = 5;
+  
+  optional string default_child_id = 6;
+  string date = 7;
+  optional string number = 8;
+  optional string remarks = 9;
+}
+
+message AccountQuery {
+  int32 page = 1;
+  int32 limit = 2;
+  base.AccountType type = 3;
+  string parent_id = 4;
+}
+
+message ListAccountsReq {
+  AccountQuery query = 1;
+}
+
+message ListAccountsRes {
+  repeated Account data = 1;
+  base.PaginatedResponse pagination = 2;
+  base.BaseResponse base = 255;
+}
+
+message CreateAccountReq {
+  AccountInput input = 1;
+}
+
+message CreateAccountRes {
+  Account account = 1;
+  base.BaseResponse base = 255;
+}
+
+message GetAccountReq {
+  string id = 1;
+}
+
+message GetAccountRes {
+  Account account = 1;
+  base.BaseResponse base = 255;
+}
+
+message UpdateAccountReq {
+  string id = 1;
+  AccountInput input = 2;
+}
+
+message UpdateAccountRes {
+  Account account = 1;
+  base.BaseResponse base = 255;
+}
+
+message DeleteAccountReq {
+  string id = 1;
+  // map<currency, targetAccountId>
+  map<string, string> migration_targets = 2;
+}
+
+message DeleteAccountRes {
+  string task_id = 1;
+  base.BaseResponse base = 255;
+}
+
+message GetAccountTransactionCountReq {
+  string id = 1;
+}
+
+message GetAccountTransactionCountRes {
+  int32 count = 1;
+  int32 count_without_equity = 2;
+  base.BaseResponse base = 255; 
+}

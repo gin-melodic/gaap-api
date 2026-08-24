@@ -18,6 +18,7 @@ temp.yaml
 bin
 **/config/config.yaml
 __debug*
+.env
 
 # Binaries for programs and plugins
 *.exe

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -14,7 +16,7 @@ import (
 
 // Message represents a message to be published or consumed
 type Message struct {
-	Type    string          `json:"type"`
+	Type    int             `json:"type"`
 	Payload json.RawMessage `json:"payload"`
 }
 
@@ -42,7 +44,8 @@ var (
 
 // Queue names
 const (
-	QueueTasks = "gaap.tasks"
+	QueueTasks     = "gaap.tasks"
+	QueueDashboard = "gaap.dashboard"
 )
 
 // GetRabbitMQ returns singleton RabbitMQ client
@@ -67,7 +70,7 @@ func SetClient(c Client) {
 func (r *RabbitMQ) IsConnected() bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	return r.channel != nil
+	return r.conn != nil && !r.conn.IsClosed() && r.channel != nil && !r.channel.IsClosed()
 }
 
 // Connect establishes connection to RabbitMQ with retry logic
@@ -90,7 +93,12 @@ func (r *RabbitMQ) Connect(ctx context.Context) error {
 		pass = "guest"
 	}
 
-	r.url = fmt.Sprintf("amqp://%s:%s@%s:%s/", user, pass, host, port)
+	r.url = (&url.URL{
+		Scheme: "amqp",
+		User:   url.UserPassword(user, pass),
+		Host:   net.JoinHostPort(host, port),
+		Path:   "/",
+	}).String()
 
 	// Retry connection with exponential backoff
 	maxRetries := 5
@@ -104,7 +112,15 @@ func (r *RabbitMQ) Connect(ctx context.Context) error {
 		if i < maxRetries-1 {
 			waitTime := time.Duration(1<<uint(i)) * time.Second // 1s, 2s, 4s, 8s, 16s
 			g.Log().Warningf(ctx, "RabbitMQ connection attempt %d failed, retrying in %v: %v", i+1, waitTime, err)
-			time.Sleep(waitTime)
+			timer := time.NewTimer(waitTime)
+			select {
+			case <-ctx.Done():
+				if !timer.Stop() {
+					<-timer.C
+				}
+				return ctx.Err()
+			case <-timer.C:
+			}
 		} else {
 			return fmt.Errorf("failed to connect to RabbitMQ after %d attempts: %w", maxRetries, err)
 		}
@@ -129,16 +145,18 @@ func (r *RabbitMQ) tryConnect(ctx context.Context) error {
 	}
 
 	// Declare queues
-	_, err = r.channel.QueueDeclare(
-		QueueTasks, // name
-		true,       // durable
-		false,      // delete when unused
-		false,      // exclusive
-		false,      // no-wait
-		nil,        // arguments
-	)
-	if err != nil {
-		return fmt.Errorf("failed to declare queue: %w", err)
+	for _, queueName := range []string{QueueTasks, QueueDashboard} {
+		_, err = r.channel.QueueDeclare(
+			queueName, // name
+			true,      // durable
+			false,     // delete when unused
+			false,     // exclusive
+			false,     // no-wait
+			nil,       // arguments
+		)
+		if err != nil {
+			return fmt.Errorf("failed to declare queue %s: %w", queueName, err)
+		}
 	}
 
 	return nil
@@ -189,7 +207,7 @@ func (r *RabbitMQ) Publish(ctx context.Context, queue string, msg *Message) erro
 		return fmt.Errorf("failed to publish message: %w", err)
 	}
 
-	g.Log().Debugf(ctx, "Published message to queue %s: %s", queue, msg.Type)
+	g.Log().Debugf(ctx, "Published message to queue %s: %d", queue, msg.Type)
 	return nil
 }
 

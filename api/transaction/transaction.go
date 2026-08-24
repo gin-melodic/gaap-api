@@ -1,14 +1,19 @@
+// =================================================================================
+// Code generated and maintained by GoFrame CLI tool. DO NOT EDIT.
+// =================================================================================
+
 package transaction
 
 import (
 	"context"
-	v1 "gaap-api/api/transaction/v1"
+
+	"gaap-api/api/transaction/v1"
 )
 
 type ITransactionV1 interface {
-	ListTransactions(ctx context.Context, req *v1.ListTransactionsReq) (res *v1.ListTransactionsRes, err error)
-	CreateTransaction(ctx context.Context, req *v1.CreateTransactionReq) (res *v1.CreateTransactionRes, err error)
-	GetTransaction(ctx context.Context, req *v1.GetTransactionReq) (res *v1.GetTransactionRes, err error)
-	UpdateTransaction(ctx context.Context, req *v1.UpdateTransactionReq) (res *v1.UpdateTransactionRes, err error)
-	DeleteTransaction(ctx context.Context, req *v1.DeleteTransactionReq) (res *v1.DeleteTransactionRes, err error)
+	GfListTransactions(ctx context.Context, req *v1.GfListTransactionsReq) (res *v1.GfListTransactionsRes, err error)
+	GfCreateTransaction(ctx context.Context, req *v1.GfCreateTransactionReq) (res *v1.GfCreateTransactionRes, err error)
+	GfGetTransaction(ctx context.Context, req *v1.GfGetTransactionReq) (res *v1.GfGetTransactionRes, err error)
+	GfUpdateTransaction(ctx context.Context, req *v1.GfUpdateTransactionReq) (res *v1.GfUpdateTransactionRes, err error)
+	GfDeleteTransaction(ctx context.Context, req *v1.GfDeleteTransactionReq) (res *v1.GfDeleteTransactionRes, err error)
 }

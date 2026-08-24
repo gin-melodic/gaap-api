@@ -8,6 +8,8 @@ import (
 	"gaap-api/internal/model"
 	"gaap-api/internal/model/entity"
 	"gaap-api/internal/service"
+
+	"github.com/gogf/gf/v2/errors/gerror"
 )
 
 type sConfig struct{}
@@ -21,12 +23,10 @@ func New() *sConfig {
 }
 
 func (s *sConfig) ListCurrencies(ctx context.Context) (out []string, err error) {
-	var results []struct {
-		Code string
-	}
+	var results []entity.Currencies
 	err = dao.Currencies.Ctx(ctx).Fields("code").WhereNull("deleted_at").Scan(&results)
 	if err != nil {
-		return
+		return nil, gerror.Wrap(err, "failed to list currencies")
 	}
 	for _, r := range results {
 		out = append(out, r.Code)
@@ -35,15 +35,21 @@ func (s *sConfig) ListCurrencies(ctx context.Context) (out []string, err error) 
 }
 
 func (s *sConfig) AddCurrency(ctx context.Context, code string) (out []string, err error) {
-	_, err = dao.Currencies.Ctx(ctx).Data(map[string]interface{}{"code": code}).Insert()
+	currency := entity.Currencies{
+		Code: code,
+	}
+	_, err = dao.Currencies.Ctx(ctx).Data(currency).Insert()
 	if err != nil {
-		return
+		return nil, gerror.Wrap(err, "failed to add currency")
 	}
 	return s.ListCurrencies(ctx)
 }
 
 func (s *sConfig) DeleteCurrency(ctx context.Context, code string) (err error) {
 	_, err = dao.Currencies.Ctx(ctx).Unscoped().Where("code", code).Delete()
+	if err != nil {
+		return gerror.Wrap(err, "failed to delete currency")
+	}
 	return
 }
 
@@ -52,7 +58,7 @@ func (s *sConfig) GetThemes(ctx context.Context) (out []model.Theme, err error) 
 	var themes []entity.Themes
 	err = dao.Themes.Ctx(ctx).WhereNull("deleted_at").Scan(&themes)
 	if err != nil {
-		return
+		return nil, gerror.Wrap(err, "failed to get themes")
 	}
 
 	out = make([]model.Theme, 0, len(themes))
@@ -77,14 +83,14 @@ func (s *sConfig) GetThemes(ctx context.Context) (out []model.Theme, err error) 
 }
 
 // GetAccountTypes returns all account type configurations
-func (s *sConfig) GetAccountTypes(ctx context.Context) (out map[string]model.AccountTypeConfig, err error) {
+func (s *sConfig) GetAccountTypes(ctx context.Context) (out map[int]model.AccountTypeConfig, err error) {
 	var accountTypes []entity.AccountTypes
 	err = dao.AccountTypes.Ctx(ctx).WhereNull("deleted_at").Scan(&accountTypes)
 	if err != nil {
-		return
+		return nil, gerror.Wrap(err, "failed to get account types")
 	}
 
-	out = make(map[string]model.AccountTypeConfig)
+	out = make(map[int]model.AccountTypeConfig)
 	for _, at := range accountTypes {
 		out[at.Type] = model.AccountTypeConfig{
 			Label: at.Label,

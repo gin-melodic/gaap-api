@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package data.v1;
+
+option go_package = "gaap-api/api/data/v1;v1";
+
+import "base/base.proto";
+import "task/v1/task.proto";
+
+service DataService {
+  // Create data export task
+  rpc ExportData(ExportDataReq) returns (ExportDataRes);
+  
+  // Create data import task
+  rpc ImportData(ImportDataReq) returns (ImportDataRes);
+  
+  // Download export file
+  // Note: Streaming RPC might be better for large files, but keeping simple for request/response migration
+  rpc DownloadExport(DownloadExportReq) returns (DownloadExportRes);
+  
+  // Get export task status
+  rpc GetExportStatus(GetExportStatusReq) returns (GetExportStatusRes);
+}
+
+message ExportParams {
+  string start_date = 1;
+  string end_date = 2;
+}
+
+message ExportDataReq {
+  ExportParams params = 1;
+}
+
+message ExportDataRes {
+  string task_id = 1;
+  base.BaseResponse base = 255;
+}
+
+message ImportDataReq {
+  // File content in bytes
+  bytes file_content = 1;
+  string file_name = 2;
+}
+
+message ImportDataRes {
+  string task_id = 1;
+  base.BaseResponse base = 255;
+}
+
+message DownloadExportReq {
+  string task_id = 1;
+}
+
+message DownloadExportRes {
+  bytes file_content = 1;
+  // Metadata could be added here
+}
+
+message GetExportStatusReq {
+  string task_id = 1;
+}
+
+message GetExportStatusRes {
+  task.v1.Task task = 1;
+  base.BaseResponse base = 255;
+}

@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package config.v1;
+
+option go_package = "gaap-api/api/config/v1;v1";
+
+import "base/base.proto";
+
+service ConfigService {
+  // Get supported currencies
+  rpc ListCurrencies(ListCurrenciesReq) returns (ListCurrenciesRes);
+  
+  // Add a supported currency
+  rpc AddCurrency(AddCurrencyReq) returns (AddCurrencyRes);
+  
+  // Remove a supported currency
+  rpc DeleteCurrency(DeleteCurrencyReq) returns (DeleteCurrencyRes);
+  
+  // Get available themes
+  rpc GetThemes(GetThemesReq) returns (GetThemesRes);
+  
+  // Get account type definitions
+  rpc GetAccountTypes(GetAccountTypesReq) returns (GetAccountTypesRes);
+}
+
+message ListCurrenciesReq {}
+
+message ListCurrenciesRes {
+  repeated string codes = 1;
+  repeated string currencies = 2;
+  base.BaseResponse base = 255;
+}
+
+message AddCurrencyReq {
+  string code = 1;
+}
+
+message AddCurrencyRes {
+  repeated string codes = 1;
+  repeated string currencies = 2;
+  base.BaseResponse base = 255;
+}
+
+message DeleteCurrencyReq {
+  string code = 1;
+}
+
+message DeleteCurrencyRes {
+  base.BaseResponse base = 255;
+}
+
+message GetThemesReq {}
+
+message GetThemesRes {
+  repeated base.Theme themes = 1;
+  base.BaseResponse base = 255;
+}
+
+message GetAccountTypesReq {}
+
+message GetAccountTypesRes {
+  map<int32, base.AccountTypeConfig> types = 1;
+  base.BaseResponse base = 255;
+}

@@ -27,8 +27,8 @@ type Message struct {
 // TaskUpdatePayload contains task update data
 type TaskUpdatePayload struct {
 	TaskId   string      `json:"taskId"`
-	Status   string      `json:"status"`
-	TaskType string      `json:"taskType"`
+	Status   int         `json:"status"`
+	TaskType int         `json:"taskType"`
 	Result   interface{} `json:"result,omitempty"`
 }
 

@@ -12,13 +12,13 @@ import (
 	"gaap-api/internal/controller/auth"
 	"gaap-api/internal/controller/config"
 	"gaap-api/internal/controller/dashboard"
-	"gaap-api/internal/controller/debug"
+	"gaap-api/internal/controller/data"
 	"gaap-api/internal/controller/health"
-	"gaap-api/internal/controller/hello"
 	"gaap-api/internal/controller/task"
 	"gaap-api/internal/controller/transaction"
 	"gaap-api/internal/controller/user"
 	"gaap-api/internal/middleware"
+	"gaap-api/internal/service"
 	"gaap-api/internal/ws"
 )
 
@@ -31,40 +31,60 @@ var (
 			// Run database migration and seeding
 			boot.InitConfig(ctx)
 			boot.InitDatabaseConfig(ctx)
-			boot.Migrate(ctx)
-			boot.InitRabbitMQ(ctx)
+			boot.InitRedis(ctx)
+			if err := boot.ValidateProductionConfig(ctx); err != nil {
+				return err
+			}
+			if err := boot.Migrate(ctx); err != nil {
+				return err
+			}
+			if err := boot.InitRabbitMQ(ctx); err != nil {
+				return err
+			}
+			// Initialize ALE (Application Layer Encryption)
+			if err := boot.InitALE(ctx); err != nil {
+				return err
+			}
 
-			// Sync account balances (with Redis distributed lock)
-			boot.SyncBalances(ctx)
+			// Account balances are committed atomically with transactions and must not
+			// be silently rewritten during startup. Rebuild derived dashboard data
+			// from the persisted source records instead.
+			boot.WarmDashboardSnapshots(ctx)
+			if err := service.DemoData().StartScheduler(ctx); err != nil {
+				return err
+			}
 
 			s := g.Server()
+			s.BindHandler("/v1/health/live", health.Live)
+			s.BindHandler("/v1/health/ready", health.Ready)
 
-			// Public routes (no authentication required)
+			// Public routes (no authentication, no ALE - health checks, etc.)
 			s.Group("/", func(group *ghttp.RouterGroup) {
 				group.Middleware(ghttp.MiddlewareHandlerResponse)
 				group.Bind(
-					hello.NewV1(),
 					health.NewV1(),
-					auth.NewV1(),   // Auth endpoints are public
-					config.NewV1(), // Config endpoints are public (currencies, etc.)
 				)
 			})
 
-			// WebSocket route (special handling, no MiddlewareHandlerResponse)
-			// Note: Route is /ws because Caddy's handle_path /api/* strips the /api prefix
-			s.BindHandler("/ws", ws.Handler)
+			if !boot.IsProduction() {
+				s.BindHandler("/v1/ws", ws.Handler)
+			}
 
-			// Protected routes (authentication required)
+			// Protected routes (authentication required, with ALE using Session Key)
 			s.Group("/", func(group *ghttp.RouterGroup) {
-				group.Middleware(ghttp.MiddlewareHandlerResponse)
+				group.Middleware(middleware.ALEResponseMiddleware)
+				group.Middleware(middleware.ALEMiddleware(middleware.ALEModeSession))
+				group.Middleware(middleware.BetaScopeMiddleware)
 				group.Middleware(middleware.AuthMiddleware)
 				group.Bind(
+					auth.NewV1(),
+					config.NewV1(),
 					user.NewV1(),
 					account.NewV1(),
 					transaction.NewV1(),
 					dashboard.NewV1(),
 					task.NewV1(),
-					debug.NewV1(),
+					data.NewV1(),
 				)
 			})
 

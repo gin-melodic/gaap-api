@@ -2,14 +2,16 @@ package dashboard
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"gaap-api/internal/dao"
-	"gaap-api/internal/middleware"
+	"gaap-api/internal/logic/utils"
 	"gaap-api/internal/model"
 	"gaap-api/internal/model/entity"
 	"gaap-api/internal/service"
+
+	"github.com/gogf/gf/v2/errors/gerror"
+	"github.com/google/uuid"
 )
 
 type sDashboard struct{}
@@ -22,242 +24,284 @@ func New() *sDashboard {
 	return &sDashboard{}
 }
 
-// GetDashboardSummary calculates total assets, liabilities, and net worth for the current user
+// GetDashboardSummary returns the dashboard summary from a Redis snapshot.
+// The snapshot is pre-computed asynchronously via RabbitMQ whenever transactions
+// or account balances change. Falls back to DB computation on cold start / cache miss.
 func (s *sDashboard) GetDashboardSummary(ctx context.Context) (out *model.DashboardSummary, err error) {
-	userId := ctx.Value(middleware.UserIdKey)
-	if userId == nil {
-		return nil, errors.New("unauthorized")
-	}
-
-	out = &model.DashboardSummary{}
-
-	// Calculate total assets (sum of all ASSET type account balances)
-	assetsResult, err := dao.Accounts.Ctx(ctx).
-		Where("user_id", userId).
-		Where("type", "ASSET").
-		Where("is_group", false).
-		WhereNull("deleted_at").
-		Sum("balance")
-	if err != nil {
-		return nil, err
-	}
-	out.Assets = assetsResult
-
-	// Calculate total liabilities (sum of all LIABILITY type account balances)
-	liabilitiesResult, err := dao.Accounts.Ctx(ctx).
-		Where("user_id", userId).
-		Where("type", "LIABILITY").
-		Where("is_group", false).
-		WhereNull("deleted_at").
-		Sum("balance")
-	if err != nil {
-		return nil, err
-	}
-	out.Liabilities = liabilitiesResult
-
-	// Calculate net worth
-	out.NetWorth = out.Assets - out.Liabilities
-
-	return
+	userId := utils.RequireUserId(ctx)
+	return GetSummarySnapshot(ctx, userId)
 }
 
-// GetMonthlyStats calculates income and expense for the current month
-func (s *sDashboard) GetMonthlyStats(ctx context.Context) (out *model.MonthlyStats, err error) {
-	userId := ctx.Value(middleware.UserIdKey)
-	if userId == nil {
-		return nil, errors.New("unauthorized")
+// loadDashboardSummaryFromDB fetches dashboard summary directly from the database.
+func (s *sDashboard) loadDashboardSummaryFromDB(ctx context.Context, userId string) (*model.DashboardSummary, error) {
+	out := &model.DashboardSummary{}
+
+	// Get all ASSET type accounts and sum their balances using MoneyHelper
+	var assetAccounts []entity.Accounts
+	err := dao.Accounts.Ctx(ctx).
+		Where(dao.Accounts.Columns().UserId, userId).
+		Where(dao.Accounts.Columns().Type, utils.AccountTypeAsset).
+		Where(dao.Accounts.Columns().IsGroup, false).
+		WhereNull(dao.Accounts.Columns().DeletedAt).
+		Scan(&assetAccounts)
+	if err != nil {
+		return nil, gerror.Wrap(err, "failed to get asset accounts")
 	}
 
-	out = &model.MonthlyStats{}
+	// Sum assets using MoneyHelper for precision
+	var totalAssets *utils.MoneyHelper
+	for _, acc := range assetAccounts {
+		accBalance := utils.NewFromEntity(&acc)
+		if totalAssets == nil {
+			totalAssets = accBalance
+			out.CurrencyCode = acc.CurrencyCode
+		} else {
+			totalAssets, err = totalAssets.Add(accBalance)
+			if err != nil {
+				// Currency mismatch - skip this account or handle differently
+				continue
+			}
+		}
+	}
+	if totalAssets != nil {
+		out.AssetsUnits, out.AssetsNanos = totalAssets.ToEntityValues()
+	}
+
+	// Get all LIABILITY type accounts
+	var liabilityAccounts []entity.Accounts
+	err = dao.Accounts.Ctx(ctx).
+		Where(dao.Accounts.Columns().UserId, userId).
+		Where(dao.Accounts.Columns().Type, utils.AccountTypeLiability).
+		Where(dao.Accounts.Columns().IsGroup, false).
+		WhereNull(dao.Accounts.Columns().DeletedAt).
+		Scan(&liabilityAccounts)
+	if err != nil {
+		return nil, gerror.Wrap(err, "failed to get liability accounts")
+	}
+
+	// Sum liabilities
+	var totalLiabilities *utils.MoneyHelper
+	for _, acc := range liabilityAccounts {
+		accBalance := utils.NewFromEntity(&acc)
+		if totalLiabilities == nil {
+			totalLiabilities = accBalance
+		} else {
+			totalLiabilities, err = totalLiabilities.Add(accBalance)
+			if err != nil {
+				continue
+			}
+		}
+	}
+	if totalLiabilities != nil {
+		out.LiabilitiesUnits, out.LiabilitiesNanos = totalLiabilities.ToEntityValues()
+	}
+
+	// Calculate net worth (Assets - Liabilities)
+	if totalAssets != nil && totalLiabilities != nil {
+		netWorth, err := totalAssets.Sub(totalLiabilities)
+		if err == nil {
+			out.NetWorthUnits, out.NetWorthNanos = netWorth.ToEntityValues()
+		}
+	} else if totalAssets != nil {
+		out.NetWorthUnits, out.NetWorthNanos = totalAssets.ToEntityValues()
+	}
+
+	return out, nil
+}
+
+// GetMonthlyStats returns the monthly income/expense from a Redis snapshot.
+func (s *sDashboard) GetMonthlyStats(ctx context.Context) (out *model.MonthlyStats, err error) {
+	userId := utils.RequireUserId(ctx)
+	return GetMonthlySnapshot(ctx, userId)
+}
+
+// loadMonthlyStatsFromDB fetches monthly stats directly from the database.
+func (s *sDashboard) loadMonthlyStatsFromDB(ctx context.Context, userId string) (*model.MonthlyStats, error) {
+	out := &model.MonthlyStats{}
 
 	// Get start and end of current month
 	now := time.Now()
 	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	endOfMonth := startOfMonth.AddDate(0, 1, 0).Add(-time.Nanosecond)
 
-	// Calculate total income this month
-	incomeResult, err := dao.Transactions.Ctx(ctx).
-		Where("user_id", userId).
-		Where("type", "INCOME").
-		WhereBetween("date", startOfMonth, endOfMonth).
-		WhereNull("deleted_at").
-		Sum("amount")
+	// Get all INCOME transactions this month
+	var incomeTransactions []entity.Transactions
+	err := dao.Transactions.Ctx(ctx).
+		Where(dao.Transactions.Columns().UserId, userId).
+		Where(dao.Transactions.Columns().Type, utils.TransactionTypeIncome).
+		WhereBetween(dao.Transactions.Columns().Date, startOfMonth, endOfMonth).
+		WhereNull(dao.Transactions.Columns().DeletedAt).
+		Scan(&incomeTransactions)
 	if err != nil {
-		return nil, err
-	}
-	out.Income = incomeResult
-
-	// Calculate total expense this month
-	expenseResult, err := dao.Transactions.Ctx(ctx).
-		Where("user_id", userId).
-		Where("type", "EXPENSE").
-		WhereBetween("date", startOfMonth, endOfMonth).
-		WhereNull("deleted_at").
-		Sum("amount")
-	if err != nil {
-		return nil, err
-	}
-	out.Expense = expenseResult
-
-	return
-}
-
-// GetBalanceTrend returns daily balance snapshots for specified accounts
-func (s *sDashboard) GetBalanceTrend(ctx context.Context, accounts []string) (out []model.DailyBalance, err error) {
-	userId := ctx.Value(middleware.UserIdKey)
-	if userId == nil {
-		return nil, errors.New("unauthorized")
+		return nil, gerror.Wrap(err, "failed to get income transactions")
 	}
 
-	// Default to last 30 days
-	now := time.Now()
-	// Set end of today clearly
-	endDate := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 999999999, now.Location())
-	startDate := endDate.AddDate(0, 0, -29) // 30 days including today
-	startOfDay := time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, startDate.Location())
-
-	// If no specific accounts requested, get all user's non-group accounts
-	if len(accounts) == 0 {
-		res, err := dao.Accounts.Ctx(ctx).
-			Where("user_id", userId).
-			Where("is_group", false).
-			WhereNull("deleted_at").
-			Fields("id").
-			All()
-		if err != nil {
-			return nil, err
+	// Sum income using MoneyHelper
+	var totalIncome *utils.MoneyHelper
+	for i, tx := range incomeTransactions {
+		// Create a temporary entity to use MoneyHelper
+		txEntity := &entity.Accounts{
+			BalanceUnits: tx.BalanceUnits,
+			BalanceNanos: tx.BalanceNanos,
+			CurrencyCode: tx.CurrencyCode,
 		}
-		accounts = res.Array("id").Strings()
-	}
-
-	if len(accounts) == 0 {
-		return []model.DailyBalance{}, nil
-	}
-
-	// 1. Get CURRENT balances for these accounts
-	currentBalances := make(map[string]float64)
-	var accountRecs []model.Account
-	err = dao.Accounts.Ctx(ctx).
-		WhereIn("id", accounts).
-		Where("user_id", userId).
-		Scan(&accountRecs)
-	if err != nil {
-		return nil, err
-	}
-	for _, acc := range accountRecs {
-		currentBalances[acc.Id] = acc.Balance
-	}
-
-	// 2. Get ALL transactions for these accounts from startDate to NOW
-	var transactions []entity.Transactions
-	var fromTrans []entity.Transactions
-	var toTrans []entity.Transactions
-
-	// Transactions where these accounts are SENDER (money OUT)
-	err = dao.Transactions.Ctx(ctx).
-		WhereIn("from_account_id", accounts).
-		WhereGTE("date", startOfDay).
-		Limit(10000).
-		Scan(&fromTrans)
-	if err != nil {
-		return nil, err
-	}
-
-	// Transactions where these accounts are RECEIVER (money IN)
-	err = dao.Transactions.Ctx(ctx).
-		WhereIn("to_account_id", accounts).
-		WhereGTE("date", startOfDay).
-		Limit(10000).
-		Scan(&toTrans)
-	if err != nil {
-		return nil, err
-	}
-
-	// Merge and deduplicate transactions
-	txMap := make(map[string]entity.Transactions)
-	for _, t := range fromTrans {
-		txMap[t.Id] = t
-	}
-	for _, t := range toTrans {
-		txMap[t.Id] = t
-	}
-
-	transactions = make([]entity.Transactions, 0, len(txMap))
-	for _, t := range txMap {
-		transactions = append(transactions, t)
-	}
-
-	// Create a map of Date -> Transactions for easier processing
-	// We map by YYYY-MM-DD
-	transactionsByDate := make(map[string][]entity.Transactions)
-	for _, t := range transactions {
-		if t.Date == nil {
-			continue
-		}
-		// Use Layout("2006-01-02") to be identical to time.Time.Format
-		dateStr := t.Date.Layout("2006-01-02")
-		transactionsByDate[dateStr] = append(transactionsByDate[dateStr], t)
-	}
-
-	// 3. Calculate daily balances BACKWARDS
-	// Initialize running balances with current balances (which corresponds to END of today)
-	runningBalances := make(map[string]float64)
-	for k, v := range currentBalances {
-		runningBalances[k] = v
-	}
-
-	// Loop from TODAY backwards to START_DATE
-	// We need to output the result in date order (oldest to newest), so we'll store in a temp map or list
-	dailyMap := make(map[string]map[string]float64)
-
-	cursorDate := endDate
-	for !cursorDate.Before(startOfDay) {
-		dateStr := cursorDate.Format("2006-01-02")
-
-		// Record the balance at the END of this day (which is the current runningBalance)
-		dayBalances := make(map[string]float64)
-		for accId, bal := range runningBalances {
-			dayBalances[accId] = bal
-		}
-		dailyMap[dateStr] = dayBalances
-
-		// Update runningBalances to be the balance at the START of this day (for the next iteration, which is yesterday)
-		// To go from End-of-Day to Start-of-Day, we REVERSE the transactions of this day.
-		// If money went OUT (FromAccount), we ADD it back.
-		// If money went IN (ToAccount), we SUBTRACT it.
-		if txs, ok := transactionsByDate[dateStr]; ok {
-			for _, tx := range txs {
-				// Handle FromAccount (Sender): Money left, so add back
-				if _, ok := runningBalances[tx.FromAccountId]; ok {
-					runningBalances[tx.FromAccountId] += tx.Amount
-				}
-				// Handle ToAccount (Receiver): Money entered, so subtract
-				if _, ok := runningBalances[tx.ToAccountId]; ok {
-					runningBalances[tx.ToAccountId] -= tx.Amount
-				}
+		txBalance := utils.NewFromEntity(txEntity)
+		if i == 0 {
+			totalIncome = txBalance
+			out.CurrencyCode = tx.CurrencyCode
+		} else {
+			totalIncome, err = totalIncome.Add(txBalance)
+			if err != nil {
+				continue
 			}
 		}
-
-		cursorDate = cursorDate.AddDate(0, 0, -1)
+	}
+	if totalIncome != nil {
+		out.IncomeUnits, out.IncomeNanos = totalIncome.ToEntityValues()
 	}
 
-	// 4. Construct final output (sorted by date)
-	out = make([]model.DailyBalance, 0)
-	for d := startOfDay; !d.After(endDate); d = d.AddDate(0, 0, 1) {
-		dateStr := d.Format("2006-01-02")
-		if bals, ok := dailyMap[dateStr]; ok {
-			out = append(out, model.DailyBalance{
-				Date:     dateStr,
-				Balances: bals,
-			})
+	// Get all EXPENSE transactions this month
+	var expenseTransactions []entity.Transactions
+	err = dao.Transactions.Ctx(ctx).
+		Where(dao.Transactions.Columns().UserId, userId).
+		Where(dao.Transactions.Columns().Type, utils.TransactionTypeExpense).
+		WhereBetween(dao.Transactions.Columns().Date, startOfMonth, endOfMonth).
+		WhereNull(dao.Transactions.Columns().DeletedAt).
+		Scan(&expenseTransactions)
+	if err != nil {
+		return nil, gerror.Wrap(err, "failed to get expense transactions")
+	}
+
+	// Sum expenses
+	var totalExpense *utils.MoneyHelper
+	for i, tx := range expenseTransactions {
+		txEntity := &entity.Accounts{
+			BalanceUnits: tx.BalanceUnits,
+			BalanceNanos: tx.BalanceNanos,
+			CurrencyCode: tx.CurrencyCode,
+		}
+		txBalance := utils.NewFromEntity(txEntity)
+		if i == 0 {
+			totalExpense = txBalance
 		} else {
-			// Should not happen with above logic, but fallback
-			out = append(out, model.DailyBalance{
-				Date:     dateStr,
-				Balances: make(map[string]float64),
-			})
+			totalExpense, err = totalExpense.Add(txBalance)
+			if err != nil {
+				continue
+			}
 		}
 	}
+	if totalExpense != nil {
+		out.ExpenseUnits, out.ExpenseNanos = totalExpense.ToEntityValues()
+	}
 
-	return
+	return out, nil
+}
+
+// GetBalanceTrend returns inclusive daily balance snapshots for the requested
+// range. Omitting both dates defaults to the past 60 calendar days.
+func (s *sDashboard) GetBalanceTrend(
+	ctx context.Context,
+	accounts []uuid.UUID,
+	startDateValue string,
+	endDateValue string,
+) (out []model.DailyBalance, err error) {
+	now := time.Now()
+	isDefaultRange := startDateValue == "" && endDateValue == ""
+	startDate, endDate, err := resolveTrendDateRange(now, startDateValue, endDateValue)
+	if err != nil {
+		return nil, err
+	}
+
+	userId := utils.RequireUserId(ctx)
+	earliestAccountDate, err := loadEarliestTrendAccountDate(ctx, userId, now.Location())
+	if err != nil {
+		return nil, err
+	}
+	startDate, err = enforceEarliestTrendAccountDate(startDate, earliestAccountDate, isDefaultRange)
+	if err != nil {
+		return nil, err
+	}
+	return GetTrendSnapshot(ctx, userId, accounts, startDate, endDate)
+}
+
+func enforceEarliestTrendAccountDate(startDate time.Time, earliestAccountDate *time.Time, isDefaultRange bool) (time.Time, error) {
+	if earliestAccountDate == nil || !startDate.Before(*earliestAccountDate) {
+		return startDate, nil
+	}
+	if !isDefaultRange {
+		return time.Time{}, gerror.New("start date must not be before the first account date")
+	}
+	return *earliestAccountDate, nil
+}
+
+func loadEarliestTrendAccountDate(ctx context.Context, userId string, location *time.Location) (*time.Time, error) {
+	var accounts []entity.Accounts
+	err := dao.Accounts.Ctx(ctx).
+		Where(dao.Accounts.Columns().UserId, userId).
+		Where(dao.Accounts.Columns().IsGroup, false).
+		WhereNull(dao.Accounts.Columns().DeletedAt).
+		Fields(dao.Accounts.Columns().Date, dao.Accounts.Columns().CreatedAt).
+		Scan(&accounts)
+	if err != nil {
+		return nil, gerror.Wrap(err, "failed to load first account date")
+	}
+
+	return earliestTrendAccountDate(accounts, location), nil
+}
+
+func earliestTrendAccountDate(accounts []entity.Accounts, location *time.Location) *time.Time {
+	var earliest *time.Time
+	for _, account := range accounts {
+		var candidate time.Time
+		if account.Date != nil {
+			candidate = account.Date.Time
+		} else if account.CreatedAt != nil {
+			candidate = account.CreatedAt.Time
+		} else {
+			continue
+		}
+		candidate = candidate.In(location)
+		candidate = time.Date(candidate.Year(), candidate.Month(), candidate.Day(), 0, 0, 0, 0, location)
+		if earliest == nil || candidate.Before(*earliest) {
+			value := candidate
+			earliest = &value
+		}
+	}
+	return earliest
+}
+
+func resolveTrendDateRange(now time.Time, startDateValue string, endDateValue string) (time.Time, time.Time, error) {
+	today := startOfLocalDay(now)
+	earliestDate := today.AddDate(-2, 0, 0)
+
+	if startDateValue == "" && endDateValue == "" {
+		return today.AddDate(0, 0, -59), today, nil
+	}
+	if startDateValue == "" || endDateValue == "" {
+		return time.Time{}, time.Time{}, gerror.New("start date and end date must be provided together")
+	}
+
+	startDate, err := time.ParseInLocation("2006-01-02", startDateValue, now.Location())
+	if err != nil {
+		return time.Time{}, time.Time{}, gerror.New("invalid start date format (expected YYYY-MM-DD)")
+	}
+	endDate, err := time.ParseInLocation("2006-01-02", endDateValue, now.Location())
+	if err != nil {
+		return time.Time{}, time.Time{}, gerror.New("invalid end date format (expected YYYY-MM-DD)")
+	}
+
+	if endDate.Before(startDate) {
+		return time.Time{}, time.Time{}, gerror.New("end date must not be before start date")
+	}
+	if endDate.After(today) {
+		return time.Time{}, time.Time{}, gerror.New("end date must not be in the future")
+	}
+	if startDate.Before(earliestDate) {
+		return time.Time{}, time.Time{}, gerror.New("start date must be within the past two years")
+	}
+	if startDate.Before(endDate.AddDate(-2, 0, 0)) {
+		return time.Time{}, time.Time{}, gerror.New("date range cannot exceed two years")
+	}
+
+	return startDate, endDate, nil
 }

@@ -2,14 +2,14 @@ package user
 
 import (
 	"context"
-	"errors"
 
 	"gaap-api/internal/dao"
-	"gaap-api/internal/middleware"
+	"gaap-api/internal/logic/utils"
 	"gaap-api/internal/model"
 	"gaap-api/internal/model/entity"
 	"gaap-api/internal/service"
 
+	"github.com/gogf/gf/v2/errors/gerror"
 	"github.com/gogf/gf/v2/frame/g"
 )
 
@@ -23,67 +23,80 @@ func New() *sUser {
 	return &sUser{}
 }
 
+// GetUserProfile returns the current user's profile with caching.
 func (s *sUser) GetUserProfile(ctx context.Context) (out *model.UserProfile, err error) {
-	userId := ctx.Value(middleware.UserIdKey)
-	if userId == nil {
-		return nil, errors.New("unauthorized")
-	}
+	userId := utils.RequireUserId(ctx)
 
+	return utils.GetOrLoad(
+		ctx,
+		utils.UserCacheKey(userId),
+		utils.CacheTTL.User,
+		func(ctx context.Context) (*model.UserProfile, error) {
+			return s.loadUserProfileFromDB(ctx, userId)
+		},
+	)
+}
+
+// loadUserProfileFromDB fetches the user profile directly from the database.
+func (s *sUser) loadUserProfileFromDB(ctx context.Context, userId string) (*model.UserProfile, error) {
 	var user *entity.Users
-	err = dao.Users.Ctx(ctx).Where("id", userId).Scan(&user)
+	err := dao.Users.Ctx(ctx).Where(dao.Users.Columns().Id, userId).Scan(&user)
 	if err != nil {
-		return
+		return nil, gerror.Wrap(err, "failed to get user")
 	}
 	if user == nil {
-		return nil, errors.New("user not found")
+		return nil, gerror.New("user not found")
 	}
-	out = &model.UserProfile{
+	return &model.UserProfile{
 		Email:            user.Email,
 		Nickname:         user.Nickname,
 		Avatar:           user.Avatar,
 		Plan:             user.Plan,
 		TwoFactorEnabled: user.TwoFactorEnabled,
 		MainCurrency:     user.MainCurrency,
-	}
-	return
+	}, nil
 }
 
+// UpdateUserProfile updates the user profile and invalidates the cache.
 func (s *sUser) UpdateUserProfile(ctx context.Context, in model.UserUpdateInput) (out *model.UserProfile, err error) {
-	userId := ctx.Value(middleware.UserIdKey)
-	if userId == nil {
-		return nil, errors.New("unauthorized")
+	userId := utils.RequireUserId(ctx)
+
+	if in.MainCurrency != "" {
+		_, err = dao.Currencies.Ctx(ctx).Data(entity.Currencies{Code: in.MainCurrency}).InsertIgnore()
+		if err != nil {
+			return nil, gerror.Wrap(err, "failed to insert currency")
+		}
 	}
 
-	_, err = dao.Users.Ctx(ctx).Data(in).Where("id", userId).Update()
+	_, err = dao.Users.Ctx(ctx).Data(in).Where(dao.Users.Columns().Id, userId).Update()
 	if err != nil {
-		return
+		return nil, gerror.Wrap(err, "failed to update user profile")
 	}
+
+	// Invalidate cache after update
+	_ = utils.InvalidateCache(ctx, utils.UserCacheKey(userId))
+
 	return s.GetUserProfile(ctx)
 }
 
+// UpdateThemePreference updates the user's theme preference and invalidates the cache.
 func (s *sUser) UpdateThemePreference(ctx context.Context, in model.Theme) (out *model.Theme, err error) {
-	userId := ctx.Value(middleware.UserIdKey)
-	if userId == nil {
-		return nil, errors.New("unauthorized")
-	}
+	userId := utils.RequireUserId(ctx)
 
 	// Validate that the theme exists
 	var theme *entity.Themes
-	err = dao.Themes.Ctx(ctx).Where("id", in.Id).WhereNull("deleted_at").Scan(&theme)
+	err = dao.Themes.Ctx(ctx).Where(dao.Themes.Columns().Id, in.Id).WhereNull(dao.Themes.Columns().DeletedAt).Scan(&theme)
 	if err != nil {
-		return nil, err
+		return nil, gerror.Wrap(err, "failed to get theme")
 	}
 	if theme == nil {
-		return nil, errors.New("theme not found")
+		return nil, gerror.New("theme not found")
 	}
 
-	// Update user's theme_id
-	_, err = dao.Users.Ctx(ctx).Where("id", userId).Data(g.Map{
-		"theme_id": in.Id,
-	}).Update()
-	if err != nil {
-		return nil, err
-	}
+	_, err = dao.Users.Ctx(ctx).Where(dao.Users.Columns().Id, userId).Data(g.Map{dao.Users.Columns().ThemeId: theme.Id}).Update()
+
+	// Invalidate cache after update
+	_ = utils.InvalidateCache(ctx, utils.UserCacheKey(userId))
 
 	// Return the updated theme
 	out = &model.Theme{

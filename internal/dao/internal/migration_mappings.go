@@ -21,15 +21,15 @@ type MigrationMappingsDao struct {
 
 // MigrationMappingsColumns defines and stores column names for the table migration_mappings.
 type MigrationMappingsColumns struct {
-	Id        string
-	TaskId    string
-	TableName string
-	RecordId  string
-	FieldName string
-	OldValue  string
-	NewValue  string
-	Applied   string
-	CreatedAt string
+	Id        string //
+	TaskId    string //
+	TableName string //
+	RecordId  string //
+	FieldName string //
+	OldValue  string //
+	NewValue  string //
+	Applied   string //
+	CreatedAt string //
 }
 
 // migrationMappingsColumns holds the columns for the table migration_mappings.
@@ -75,7 +75,7 @@ func (dao *MigrationMappingsDao) Group() string {
 	return dao.group
 }
 
-// Ctx creates and returns a Model for the current DAO.
+// Ctx creates and returns a Model for the current DAO. It automatically sets the context for the current operation.
 func (dao *MigrationMappingsDao) Ctx(ctx context.Context) *gdb.Model {
 	model := dao.DB().Model(dao.table)
 	for _, handler := range dao.handlers {
@@ -85,6 +85,11 @@ func (dao *MigrationMappingsDao) Ctx(ctx context.Context) *gdb.Model {
 }
 
 // Transaction wraps the transaction logic using function f.
+// It rolls back the transaction and returns the error if function f returns a non-nil error.
+// It commits the transaction and returns nil if function f returns nil.
+//
+// Note: Do not commit or roll back the transaction in function f,
+// as it is automatically handled by this function.
 func (dao *MigrationMappingsDao) Transaction(ctx context.Context, f func(ctx context.Context, tx gdb.TX) error) (err error) {
 	return dao.Ctx(ctx).Transaction(ctx, f)
 }

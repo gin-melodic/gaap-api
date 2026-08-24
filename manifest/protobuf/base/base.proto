@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package base;
+
+option go_package = "gaap-api/api/base;base";
+
+// Base response included in most API responses
+message BaseResponse {
+  string message = 1;
+}
+
+// Transport-level error returned for any failed ALE request.
+message ErrorResponse {
+  int32 code = 1;
+  string message = 2;
+  string request_id = 3;
+}
+
+// Pagination metadata
+message PaginatedResponse {
+  int32 total = 1;
+  int32 page = 2;
+  int32 limit = 3;
+  int32 total_pages = 4;
+}
+
+// User theme preference
+message Theme {
+  string id = 1;
+  string name = 2;
+  bool is_dark = 3;
+  ThemeColors colors = 4;
+}
+
+// Specific colors for the theme
+message ThemeColors {
+  string primary = 1;
+  string bg = 2;
+  string card = 3;
+  string text = 4;
+  string muted = 5;
+  string border = 6;
+}
+
+// UI configuration for account types
+message AccountTypeConfig {
+  string label = 1;
+  string color = 2;
+  string bg = 3;
+  string icon = 4;
+}
+
+// Share messages
+message Money {
+  // ISO 4217 Currency Code, such as "CNY", "USD", "JPY"
+  // If it's a stock or custom asset, use "AAPL", "BTC"
+  string currency_code = 1;
+
+  // Integer part. For example, 100.50 yuan, store 100
+  int64 units = 2;
+
+  // Decimal part, in nanos (10^-9). For example, 0.50 yuan, store 500,000,000
+  // Range must be between -999,999,999 and +999,999,999
+  int32 nanos = 3;
+}
+
+// Share enum
+// Account Type
+enum AccountType {
+  ACCOUNT_TYPE_UNSPECIFIED = 0; // Default
+  ACCOUNT_TYPE_ASSET = 1;
+  ACCOUNT_TYPE_LIABILITY = 2;
+  ACCOUNT_TYPE_INCOME = 3;
+  ACCOUNT_TYPE_EXPENSE = 4;
+  ACCOUNT_TYPE_EQUITY = 5;
+}
+
+// Transaction Type
+enum TransactionType {
+  TRANSACTION_TYPE_UNSPECIFIED = 0; // Default
+  TRANSACTION_TYPE_INCOME = 1;
+  TRANSACTION_TYPE_EXPENSE = 2;
+  TRANSACTION_TYPE_TRANSFER = 3;
+  TRANSACTION_TYPE_OPENING_BALANCE = 4;
+}
+
+// User Level Type
+enum UserLevelType {
+  USER_LEVEL_TYPE_UNSPECIFIED = 0; // Default
+  USER_LEVEL_TYPE_FREE = 1;
+  USER_LEVEL_TYPE_PRO = 2;
+}

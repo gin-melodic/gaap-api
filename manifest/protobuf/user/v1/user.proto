@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package user.v1;
+
+option go_package = "gaap-api/api/user/v1;v1";
+
+import "google/protobuf/timestamp.proto";
+import "base/base.proto";
+
+// Service definition
+service UserService {
+  // Get current user profile
+  rpc GetProfile(GetUserProfileReq) returns (GetUserProfileRes);
+
+  // Update user profile
+  rpc UpdateProfile(UpdateUserProfileReq) returns (UpdateUserProfileRes);
+
+  // Update user theme preference
+  rpc UpdateTheme(UpdateThemePreferenceReq) returns (UpdateThemePreferenceRes);
+}
+
+// User data structure
+message User {
+  string id = 1;
+  string email = 2;
+  string nickname = 3;
+  optional string avatar = 4;
+  // Plan type: FREE, PRO
+  base.UserLevelType plan = 5;
+  bool two_factor_enabled = 6;
+  string main_currency = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+message UserInput {
+  string nickname = 1;
+  optional string avatar = 2;
+  base.UserLevelType plan = 3;
+  optional string main_currency = 4;
+}
+
+message GetUserProfileReq {}
+
+message GetUserProfileRes {
+  User user = 1;
+  base.BaseResponse base = 255;
+}
+
+message UpdateUserProfileReq {
+  UserInput input = 1;
+}
+
+message UpdateUserProfileRes {
+  User user = 1;
+  base.BaseResponse base = 255;
+}
+
+message UpdateThemePreferenceReq {
+  base.Theme theme = 1;
+}
+
+message UpdateThemePreferenceRes {
+  base.Theme theme = 1;
+  base.BaseResponse base = 255;
+}

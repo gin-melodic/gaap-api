@@ -12,10 +12,10 @@ import (
 // Themes is the golang structure of table themes for DAO operations like Where/Data.
 type Themes struct {
 	g.Meta    `orm:"table:themes, do:true"`
-	Id        interface{} //
-	Name      interface{} //
-	IsDark    interface{} //
-	Colors    interface{} //
+	Id        any         //
+	Name      any         //
+	IsDark    any         //
+	Colors    any         //
 	CreatedAt *gtime.Time //
 	UpdatedAt *gtime.Time //
 	DeletedAt *gtime.Time //

@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package dashboard.v1;
+
+option go_package = "gaap-api/api/dashboard/v1;v1";
+
+import "base/base.proto";
+
+service DashboardService {
+  // Get dashboard summary
+  rpc GetDashboardSummary(GetDashboardSummaryReq) returns (GetDashboardSummaryRes);
+  
+  // Get monthly income and expense statistics
+  rpc GetMonthlyStats(GetMonthlyStatsReq) returns (GetMonthlyStatsRes);
+  
+  // Get balance trend data
+  rpc GetBalanceTrend(GetBalanceTrendReq) returns (GetBalanceTrendRes);
+}
+
+message DashboardSummary {
+  base.Money assets = 1;
+  base.Money liabilities = 2;
+  base.Money net_worth = 3;
+}
+
+message MonthlyStats {
+  base.Money income = 1;
+  base.Money expense = 2;
+}
+
+message DailyBalance {
+  // Date string
+  string date = 1;
+  // Account ID -> Balance
+  map<string, base.Money> balances = 2;
+}
+
+message GetDashboardSummaryReq {}
+
+message GetDashboardSummaryRes {
+  DashboardSummary summary = 1;
+  base.BaseResponse base = 255;
+}
+
+message GetMonthlyStatsReq {}
+
+message GetMonthlyStatsRes {
+  MonthlyStats stats = 1;
+  base.BaseResponse base = 255;
+}
+
+message GetBalanceTrendReq {
+  repeated string accounts = 1;
+  // Inclusive start date in YYYY-MM-DD format. Defaults with end_date to the past 60 days.
+  string start_date = 2;
+  // Inclusive end date in YYYY-MM-DD format. Defaults with start_date to today.
+  string end_date = 3;
+}
+
+message GetBalanceTrendRes {
+  repeated DailyBalance data = 1;
+  base.BaseResponse base = 255;
+}
