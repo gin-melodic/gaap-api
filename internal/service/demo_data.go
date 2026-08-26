@@ -11,7 +11,8 @@ import (
 
 type (
 	IDemoData interface {
-		// StartScheduler starts the demo catch-up loop when explicitly enabled.
+		// StartScheduler validates the online demo, captures its immutable baseline,
+		// and starts the daily reset/catch-up loop.
 		StartScheduler(ctx context.Context) error
 		// CatchUp generates every unfinished business date from the configured start
 		// date through yesterday in the configured timezone.
