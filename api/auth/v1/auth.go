@@ -24,6 +24,16 @@ type GfLoginReq struct {
 type GfLoginRes = LoginRes
 
 
+// GfDemoLoginReq is the GoFrame-compatible request wrapper for DemoLogin
+type GfDemoLoginReq struct {
+	g.Meta `path:"/v1/auth/demo-login" method:"POST" tags:"auth" summary:"Passwordless login for the configured online demo user"`
+	DemoLoginReq
+}
+
+// GfDemoLoginRes is the GoFrame-compatible response wrapper for DemoLogin
+type GfDemoLoginRes = LoginRes
+
+
 // GfRegisterReq is the GoFrame-compatible request wrapper for Register
 type GfRegisterReq struct {
 	g.Meta `path:"/v1/auth/register" method:"POST" tags:"auth" summary:"User registration"`

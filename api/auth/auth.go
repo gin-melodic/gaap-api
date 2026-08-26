@@ -12,6 +12,7 @@ import (
 
 type IAuthV1 interface {
 	GfLogin(ctx context.Context, req *v1.GfLoginReq) (res *v1.GfLoginRes, err error)
+	GfDemoLogin(ctx context.Context, req *v1.GfDemoLoginReq) (res *v1.GfDemoLoginRes, err error)
 	GfRegister(ctx context.Context, req *v1.GfRegisterReq) (res *v1.GfRegisterRes, err error)
 	GfLogout(ctx context.Context, req *v1.GfLogoutReq) (res *v1.GfLogoutRes, err error)
 	GfRefreshToken(ctx context.Context, req *v1.GfRefreshTokenReq) (res *v1.GfRefreshTokenRes, err error)

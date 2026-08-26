@@ -37,12 +37,13 @@ func AuthMiddleware(r *ghttp.Request) {
 	reject := func(status int, message string) {
 		writeProtoError(r, status, message, r.GetCtxVar("ale_key").String())
 	}
-	// Skip auth for public auth routes (login, register, refresh-token, logout)
+	// Skip auth for public bootstrap routes.
 	publicPaths := map[string]bool{
-		"/v1/auth/login":         true,
-		"/v1/auth/register":            true,
-		"/v1/auth/refresh-token":       true,
-		"/v1/auth/get-currency-list":   true,
+		"/v1/auth/login":             true,
+		"/v1/auth/demo-login":        true,
+		"/v1/auth/register":          true,
+		"/v1/auth/refresh-token":     true,
+		"/v1/auth/get-currency-list": true,
 	}
 	if publicPaths[r.URL.Path] {
 		r.Middleware.Next()

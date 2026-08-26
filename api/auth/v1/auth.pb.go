@@ -316,6 +316,42 @@ func (x *LoginRes) GetBase() *base.BaseResponse {
 	return nil
 }
 
+type DemoLoginReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DemoLoginReq) Reset() {
+	*x = DemoLoginReq{}
+	mi := &file_auth_v1_auth_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DemoLoginReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DemoLoginReq) ProtoMessage() {}
+
+func (x *DemoLoginReq) ProtoReflect() protoreflect.Message {
+	mi := &file_auth_v1_auth_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DemoLoginReq.ProtoReflect.Descriptor instead.
+func (*DemoLoginReq) Descriptor() ([]byte, []int) {
+	return file_auth_v1_auth_proto_rawDescGZIP(), []int{5}
+}
+
 type RegisterReq struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	Email               string                 `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
@@ -329,7 +365,7 @@ type RegisterReq struct {
 
 func (x *RegisterReq) Reset() {
 	*x = RegisterReq{}
-	mi := &file_auth_v1_auth_proto_msgTypes[5]
+	mi := &file_auth_v1_auth_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -341,7 +377,7 @@ func (x *RegisterReq) String() string {
 func (*RegisterReq) ProtoMessage() {}
 
 func (x *RegisterReq) ProtoReflect() protoreflect.Message {
-	mi := &file_auth_v1_auth_proto_msgTypes[5]
+	mi := &file_auth_v1_auth_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -354,7 +390,7 @@ func (x *RegisterReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterReq.ProtoReflect.Descriptor instead.
 func (*RegisterReq) Descriptor() ([]byte, []int) {
-	return file_auth_v1_auth_proto_rawDescGZIP(), []int{5}
+	return file_auth_v1_auth_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *RegisterReq) GetEmail() string {
@@ -402,7 +438,7 @@ type RegisterRes struct {
 
 func (x *RegisterRes) Reset() {
 	*x = RegisterRes{}
-	mi := &file_auth_v1_auth_proto_msgTypes[6]
+	mi := &file_auth_v1_auth_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -414,7 +450,7 @@ func (x *RegisterRes) String() string {
 func (*RegisterRes) ProtoMessage() {}
 
 func (x *RegisterRes) ProtoReflect() protoreflect.Message {
-	mi := &file_auth_v1_auth_proto_msgTypes[6]
+	mi := &file_auth_v1_auth_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -427,7 +463,7 @@ func (x *RegisterRes) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterRes.ProtoReflect.Descriptor instead.
 func (*RegisterRes) Descriptor() ([]byte, []int) {
-	return file_auth_v1_auth_proto_rawDescGZIP(), []int{6}
+	return file_auth_v1_auth_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *RegisterRes) GetAuth() *AuthResponse {
@@ -452,7 +488,7 @@ type LogoutReq struct {
 
 func (x *LogoutReq) Reset() {
 	*x = LogoutReq{}
-	mi := &file_auth_v1_auth_proto_msgTypes[7]
+	mi := &file_auth_v1_auth_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -464,7 +500,7 @@ func (x *LogoutReq) String() string {
 func (*LogoutReq) ProtoMessage() {}
 
 func (x *LogoutReq) ProtoReflect() protoreflect.Message {
-	mi := &file_auth_v1_auth_proto_msgTypes[7]
+	mi := &file_auth_v1_auth_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -477,7 +513,7 @@ func (x *LogoutReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogoutReq.ProtoReflect.Descriptor instead.
 func (*LogoutReq) Descriptor() ([]byte, []int) {
-	return file_auth_v1_auth_proto_rawDescGZIP(), []int{7}
+	return file_auth_v1_auth_proto_rawDescGZIP(), []int{8}
 }
 
 type LogoutRes struct {
@@ -489,7 +525,7 @@ type LogoutRes struct {
 
 func (x *LogoutRes) Reset() {
 	*x = LogoutRes{}
-	mi := &file_auth_v1_auth_proto_msgTypes[8]
+	mi := &file_auth_v1_auth_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -501,7 +537,7 @@ func (x *LogoutRes) String() string {
 func (*LogoutRes) ProtoMessage() {}
 
 func (x *LogoutRes) ProtoReflect() protoreflect.Message {
-	mi := &file_auth_v1_auth_proto_msgTypes[8]
+	mi := &file_auth_v1_auth_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -514,7 +550,7 @@ func (x *LogoutRes) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogoutRes.ProtoReflect.Descriptor instead.
 func (*LogoutRes) Descriptor() ([]byte, []int) {
-	return file_auth_v1_auth_proto_rawDescGZIP(), []int{8}
+	return file_auth_v1_auth_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *LogoutRes) GetBase() *base.BaseResponse {
@@ -533,7 +569,7 @@ type RefreshTokenReq struct {
 
 func (x *RefreshTokenReq) Reset() {
 	*x = RefreshTokenReq{}
-	mi := &file_auth_v1_auth_proto_msgTypes[9]
+	mi := &file_auth_v1_auth_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -545,7 +581,7 @@ func (x *RefreshTokenReq) String() string {
 func (*RefreshTokenReq) ProtoMessage() {}
 
 func (x *RefreshTokenReq) ProtoReflect() protoreflect.Message {
-	mi := &file_auth_v1_auth_proto_msgTypes[9]
+	mi := &file_auth_v1_auth_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -558,7 +594,7 @@ func (x *RefreshTokenReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshTokenReq.ProtoReflect.Descriptor instead.
 func (*RefreshTokenReq) Descriptor() ([]byte, []int) {
-	return file_auth_v1_auth_proto_rawDescGZIP(), []int{9}
+	return file_auth_v1_auth_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *RefreshTokenReq) GetRefreshToken() string {
@@ -580,7 +616,7 @@ type RefreshTokenRes struct {
 
 func (x *RefreshTokenRes) Reset() {
 	*x = RefreshTokenRes{}
-	mi := &file_auth_v1_auth_proto_msgTypes[10]
+	mi := &file_auth_v1_auth_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -592,7 +628,7 @@ func (x *RefreshTokenRes) String() string {
 func (*RefreshTokenRes) ProtoMessage() {}
 
 func (x *RefreshTokenRes) ProtoReflect() protoreflect.Message {
-	mi := &file_auth_v1_auth_proto_msgTypes[10]
+	mi := &file_auth_v1_auth_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -605,7 +641,7 @@ func (x *RefreshTokenRes) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshTokenRes.ProtoReflect.Descriptor instead.
 func (*RefreshTokenRes) Descriptor() ([]byte, []int) {
-	return file_auth_v1_auth_proto_rawDescGZIP(), []int{10}
+	return file_auth_v1_auth_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *RefreshTokenRes) GetAccessToken() string {
@@ -646,7 +682,7 @@ type TwoFactorSecret struct {
 
 func (x *TwoFactorSecret) Reset() {
 	*x = TwoFactorSecret{}
-	mi := &file_auth_v1_auth_proto_msgTypes[11]
+	mi := &file_auth_v1_auth_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -658,7 +694,7 @@ func (x *TwoFactorSecret) String() string {
 func (*TwoFactorSecret) ProtoMessage() {}
 
 func (x *TwoFactorSecret) ProtoReflect() protoreflect.Message {
-	mi := &file_auth_v1_auth_proto_msgTypes[11]
+	mi := &file_auth_v1_auth_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -671,7 +707,7 @@ func (x *TwoFactorSecret) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TwoFactorSecret.ProtoReflect.Descriptor instead.
 func (*TwoFactorSecret) Descriptor() ([]byte, []int) {
-	return file_auth_v1_auth_proto_rawDescGZIP(), []int{11}
+	return file_auth_v1_auth_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *TwoFactorSecret) GetSecret() string {
@@ -696,7 +732,7 @@ type Generate2FAReq struct {
 
 func (x *Generate2FAReq) Reset() {
 	*x = Generate2FAReq{}
-	mi := &file_auth_v1_auth_proto_msgTypes[12]
+	mi := &file_auth_v1_auth_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -708,7 +744,7 @@ func (x *Generate2FAReq) String() string {
 func (*Generate2FAReq) ProtoMessage() {}
 
 func (x *Generate2FAReq) ProtoReflect() protoreflect.Message {
-	mi := &file_auth_v1_auth_proto_msgTypes[12]
+	mi := &file_auth_v1_auth_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -721,7 +757,7 @@ func (x *Generate2FAReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Generate2FAReq.ProtoReflect.Descriptor instead.
 func (*Generate2FAReq) Descriptor() ([]byte, []int) {
-	return file_auth_v1_auth_proto_rawDescGZIP(), []int{12}
+	return file_auth_v1_auth_proto_rawDescGZIP(), []int{13}
 }
 
 type Generate2FARes struct {
@@ -734,7 +770,7 @@ type Generate2FARes struct {
 
 func (x *Generate2FARes) Reset() {
 	*x = Generate2FARes{}
-	mi := &file_auth_v1_auth_proto_msgTypes[13]
+	mi := &file_auth_v1_auth_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -746,7 +782,7 @@ func (x *Generate2FARes) String() string {
 func (*Generate2FARes) ProtoMessage() {}
 
 func (x *Generate2FARes) ProtoReflect() protoreflect.Message {
-	mi := &file_auth_v1_auth_proto_msgTypes[13]
+	mi := &file_auth_v1_auth_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -759,7 +795,7 @@ func (x *Generate2FARes) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Generate2FARes.ProtoReflect.Descriptor instead.
 func (*Generate2FARes) Descriptor() ([]byte, []int) {
-	return file_auth_v1_auth_proto_rawDescGZIP(), []int{13}
+	return file_auth_v1_auth_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *Generate2FARes) GetSecret() *TwoFactorSecret {
@@ -785,7 +821,7 @@ type Enable2FAReq struct {
 
 func (x *Enable2FAReq) Reset() {
 	*x = Enable2FAReq{}
-	mi := &file_auth_v1_auth_proto_msgTypes[14]
+	mi := &file_auth_v1_auth_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -797,7 +833,7 @@ func (x *Enable2FAReq) String() string {
 func (*Enable2FAReq) ProtoMessage() {}
 
 func (x *Enable2FAReq) ProtoReflect() protoreflect.Message {
-	mi := &file_auth_v1_auth_proto_msgTypes[14]
+	mi := &file_auth_v1_auth_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -810,7 +846,7 @@ func (x *Enable2FAReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Enable2FAReq.ProtoReflect.Descriptor instead.
 func (*Enable2FAReq) Descriptor() ([]byte, []int) {
-	return file_auth_v1_auth_proto_rawDescGZIP(), []int{14}
+	return file_auth_v1_auth_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *Enable2FAReq) GetCode() string {
@@ -829,7 +865,7 @@ type Enable2FARes struct {
 
 func (x *Enable2FARes) Reset() {
 	*x = Enable2FARes{}
-	mi := &file_auth_v1_auth_proto_msgTypes[15]
+	mi := &file_auth_v1_auth_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -841,7 +877,7 @@ func (x *Enable2FARes) String() string {
 func (*Enable2FARes) ProtoMessage() {}
 
 func (x *Enable2FARes) ProtoReflect() protoreflect.Message {
-	mi := &file_auth_v1_auth_proto_msgTypes[15]
+	mi := &file_auth_v1_auth_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -854,7 +890,7 @@ func (x *Enable2FARes) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Enable2FARes.ProtoReflect.Descriptor instead.
 func (*Enable2FARes) Descriptor() ([]byte, []int) {
-	return file_auth_v1_auth_proto_rawDescGZIP(), []int{15}
+	return file_auth_v1_auth_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *Enable2FARes) GetBase() *base.BaseResponse {
@@ -874,7 +910,7 @@ type Disable2FAReq struct {
 
 func (x *Disable2FAReq) Reset() {
 	*x = Disable2FAReq{}
-	mi := &file_auth_v1_auth_proto_msgTypes[16]
+	mi := &file_auth_v1_auth_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -886,7 +922,7 @@ func (x *Disable2FAReq) String() string {
 func (*Disable2FAReq) ProtoMessage() {}
 
 func (x *Disable2FAReq) ProtoReflect() protoreflect.Message {
-	mi := &file_auth_v1_auth_proto_msgTypes[16]
+	mi := &file_auth_v1_auth_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -899,7 +935,7 @@ func (x *Disable2FAReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Disable2FAReq.ProtoReflect.Descriptor instead.
 func (*Disable2FAReq) Descriptor() ([]byte, []int) {
-	return file_auth_v1_auth_proto_rawDescGZIP(), []int{16}
+	return file_auth_v1_auth_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *Disable2FAReq) GetCode() string {
@@ -925,7 +961,7 @@ type Disable2FARes struct {
 
 func (x *Disable2FARes) Reset() {
 	*x = Disable2FARes{}
-	mi := &file_auth_v1_auth_proto_msgTypes[17]
+	mi := &file_auth_v1_auth_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -937,7 +973,7 @@ func (x *Disable2FARes) String() string {
 func (*Disable2FARes) ProtoMessage() {}
 
 func (x *Disable2FARes) ProtoReflect() protoreflect.Message {
-	mi := &file_auth_v1_auth_proto_msgTypes[17]
+	mi := &file_auth_v1_auth_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -950,7 +986,7 @@ func (x *Disable2FARes) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Disable2FARes.ProtoReflect.Descriptor instead.
 func (*Disable2FARes) Descriptor() ([]byte, []int) {
-	return file_auth_v1_auth_proto_rawDescGZIP(), []int{17}
+	return file_auth_v1_auth_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *Disable2FARes) GetBase() *base.BaseResponse {
@@ -969,7 +1005,7 @@ type CurrencyInfo struct {
 
 func (x *CurrencyInfo) Reset() {
 	*x = CurrencyInfo{}
-	mi := &file_auth_v1_auth_proto_msgTypes[18]
+	mi := &file_auth_v1_auth_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -981,7 +1017,7 @@ func (x *CurrencyInfo) String() string {
 func (*CurrencyInfo) ProtoMessage() {}
 
 func (x *CurrencyInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_auth_v1_auth_proto_msgTypes[18]
+	mi := &file_auth_v1_auth_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -994,7 +1030,7 @@ func (x *CurrencyInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CurrencyInfo.ProtoReflect.Descriptor instead.
 func (*CurrencyInfo) Descriptor() ([]byte, []int) {
-	return file_auth_v1_auth_proto_rawDescGZIP(), []int{18}
+	return file_auth_v1_auth_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *CurrencyInfo) GetCode() string {
@@ -1012,7 +1048,7 @@ type GetCurrencyListReq struct {
 
 func (x *GetCurrencyListReq) Reset() {
 	*x = GetCurrencyListReq{}
-	mi := &file_auth_v1_auth_proto_msgTypes[19]
+	mi := &file_auth_v1_auth_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1024,7 +1060,7 @@ func (x *GetCurrencyListReq) String() string {
 func (*GetCurrencyListReq) ProtoMessage() {}
 
 func (x *GetCurrencyListReq) ProtoReflect() protoreflect.Message {
-	mi := &file_auth_v1_auth_proto_msgTypes[19]
+	mi := &file_auth_v1_auth_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1037,7 +1073,7 @@ func (x *GetCurrencyListReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCurrencyListReq.ProtoReflect.Descriptor instead.
 func (*GetCurrencyListReq) Descriptor() ([]byte, []int) {
-	return file_auth_v1_auth_proto_rawDescGZIP(), []int{19}
+	return file_auth_v1_auth_proto_rawDescGZIP(), []int{20}
 }
 
 type GetCurrencyListRes struct {
@@ -1050,7 +1086,7 @@ type GetCurrencyListRes struct {
 
 func (x *GetCurrencyListRes) Reset() {
 	*x = GetCurrencyListRes{}
-	mi := &file_auth_v1_auth_proto_msgTypes[20]
+	mi := &file_auth_v1_auth_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1062,7 +1098,7 @@ func (x *GetCurrencyListRes) String() string {
 func (*GetCurrencyListRes) ProtoMessage() {}
 
 func (x *GetCurrencyListRes) ProtoReflect() protoreflect.Message {
-	mi := &file_auth_v1_auth_proto_msgTypes[20]
+	mi := &file_auth_v1_auth_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1075,7 +1111,7 @@ func (x *GetCurrencyListRes) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCurrencyListRes.ProtoReflect.Descriptor instead.
 func (*GetCurrencyListRes) Descriptor() ([]byte, []int) {
-	return file_auth_v1_auth_proto_rawDescGZIP(), []int{20}
+	return file_auth_v1_auth_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *GetCurrencyListRes) GetCurrencies() []*CurrencyInfo {
@@ -1116,7 +1152,8 @@ const file_auth_v1_auth_proto_rawDesc = "" +
 	"\x15cf_turnstile_response\x18\x04 \x01(\tR\x13cfTurnstileResponse\"^\n" +
 	"\bLoginRes\x12)\n" +
 	"\x04auth\x18\x01 \x01(\v2\x15.auth.v1.AuthResponseR\x04auth\x12'\n" +
-	"\x04base\x18\xff\x01 \x01(\v2\x12.base.BaseResponseR\x04base\"\xb4\x01\n" +
+	"\x04base\x18\xff\x01 \x01(\v2\x12.base.BaseResponseR\x04base\"\x0e\n" +
+	"\fDemoLoginReq\"\xb4\x01\n" +
 	"\vRegisterReq\x12\x14\n" +
 	"\x05email\x18\x01 \x01(\tR\x05email\x12\x1a\n" +
 	"\bpassword\x18\x02 \x01(\tR\bpassword\x12\x1a\n" +
@@ -1160,9 +1197,10 @@ const file_auth_v1_auth_proto_rawDesc = "" +
 	"\n" +
 	"currencies\x18\x01 \x03(\v2\x15.auth.v1.CurrencyInfoR\n" +
 	"currencies\x12'\n" +
-	"\x04base\x18\xff\x01 \x01(\v2\x12.base.BaseResponseR\x04base2\xbb\x04\n" +
+	"\x04base\x18\xff\x01 \x01(\v2\x12.base.BaseResponseR\x04base2\xf2\x04\n" +
 	"\vAuthService\x12-\n" +
-	"\x05Login\x12\x11.auth.v1.LoginReq\x1a\x11.auth.v1.LoginRes\x126\n" +
+	"\x05Login\x12\x11.auth.v1.LoginReq\x1a\x11.auth.v1.LoginRes\x125\n" +
+	"\tDemoLogin\x12\x15.auth.v1.DemoLoginReq\x1a\x11.auth.v1.LoginRes\x126\n" +
 	"\bRegister\x12\x14.auth.v1.RegisterReq\x1a\x14.auth.v1.RegisterRes\x120\n" +
 	"\x06Logout\x12\x12.auth.v1.LogoutReq\x1a\x12.auth.v1.LogoutRes\x12B\n" +
 	"\fRefreshToken\x12\x18.auth.v1.RefreshTokenReq\x1a\x18.auth.v1.RefreshTokenRes\x12?\n" +
@@ -1185,67 +1223,70 @@ func file_auth_v1_auth_proto_rawDescGZIP() []byte {
 	return file_auth_v1_auth_proto_rawDescData
 }
 
-var file_auth_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
+var file_auth_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
 var file_auth_v1_auth_proto_goTypes = []any{
 	(*UpdatePasswordReq)(nil),  // 0: auth.v1.UpdatePasswordReq
 	(*UpdatePasswordRes)(nil),  // 1: auth.v1.UpdatePasswordRes
 	(*AuthResponse)(nil),       // 2: auth.v1.AuthResponse
 	(*LoginReq)(nil),           // 3: auth.v1.LoginReq
 	(*LoginRes)(nil),           // 4: auth.v1.LoginRes
-	(*RegisterReq)(nil),        // 5: auth.v1.RegisterReq
-	(*RegisterRes)(nil),        // 6: auth.v1.RegisterRes
-	(*LogoutReq)(nil),          // 7: auth.v1.LogoutReq
-	(*LogoutRes)(nil),          // 8: auth.v1.LogoutRes
-	(*RefreshTokenReq)(nil),    // 9: auth.v1.RefreshTokenReq
-	(*RefreshTokenRes)(nil),    // 10: auth.v1.RefreshTokenRes
-	(*TwoFactorSecret)(nil),    // 11: auth.v1.TwoFactorSecret
-	(*Generate2FAReq)(nil),     // 12: auth.v1.Generate2FAReq
-	(*Generate2FARes)(nil),     // 13: auth.v1.Generate2FARes
-	(*Enable2FAReq)(nil),       // 14: auth.v1.Enable2FAReq
-	(*Enable2FARes)(nil),       // 15: auth.v1.Enable2FARes
-	(*Disable2FAReq)(nil),      // 16: auth.v1.Disable2FAReq
-	(*Disable2FARes)(nil),      // 17: auth.v1.Disable2FARes
-	(*CurrencyInfo)(nil),       // 18: auth.v1.CurrencyInfo
-	(*GetCurrencyListReq)(nil), // 19: auth.v1.GetCurrencyListReq
-	(*GetCurrencyListRes)(nil), // 20: auth.v1.GetCurrencyListRes
-	(*base.BaseResponse)(nil),  // 21: base.BaseResponse
-	(*v1.User)(nil),            // 22: user.v1.User
+	(*DemoLoginReq)(nil),       // 5: auth.v1.DemoLoginReq
+	(*RegisterReq)(nil),        // 6: auth.v1.RegisterReq
+	(*RegisterRes)(nil),        // 7: auth.v1.RegisterRes
+	(*LogoutReq)(nil),          // 8: auth.v1.LogoutReq
+	(*LogoutRes)(nil),          // 9: auth.v1.LogoutRes
+	(*RefreshTokenReq)(nil),    // 10: auth.v1.RefreshTokenReq
+	(*RefreshTokenRes)(nil),    // 11: auth.v1.RefreshTokenRes
+	(*TwoFactorSecret)(nil),    // 12: auth.v1.TwoFactorSecret
+	(*Generate2FAReq)(nil),     // 13: auth.v1.Generate2FAReq
+	(*Generate2FARes)(nil),     // 14: auth.v1.Generate2FARes
+	(*Enable2FAReq)(nil),       // 15: auth.v1.Enable2FAReq
+	(*Enable2FARes)(nil),       // 16: auth.v1.Enable2FARes
+	(*Disable2FAReq)(nil),      // 17: auth.v1.Disable2FAReq
+	(*Disable2FARes)(nil),      // 18: auth.v1.Disable2FARes
+	(*CurrencyInfo)(nil),       // 19: auth.v1.CurrencyInfo
+	(*GetCurrencyListReq)(nil), // 20: auth.v1.GetCurrencyListReq
+	(*GetCurrencyListRes)(nil), // 21: auth.v1.GetCurrencyListRes
+	(*base.BaseResponse)(nil),  // 22: base.BaseResponse
+	(*v1.User)(nil),            // 23: user.v1.User
 }
 var file_auth_v1_auth_proto_depIdxs = []int32{
-	21, // 0: auth.v1.UpdatePasswordRes.base:type_name -> base.BaseResponse
-	22, // 1: auth.v1.AuthResponse.user:type_name -> user.v1.User
+	22, // 0: auth.v1.UpdatePasswordRes.base:type_name -> base.BaseResponse
+	23, // 1: auth.v1.AuthResponse.user:type_name -> user.v1.User
 	2,  // 2: auth.v1.LoginRes.auth:type_name -> auth.v1.AuthResponse
-	21, // 3: auth.v1.LoginRes.base:type_name -> base.BaseResponse
+	22, // 3: auth.v1.LoginRes.base:type_name -> base.BaseResponse
 	2,  // 4: auth.v1.RegisterRes.auth:type_name -> auth.v1.AuthResponse
-	21, // 5: auth.v1.RegisterRes.base:type_name -> base.BaseResponse
-	21, // 6: auth.v1.LogoutRes.base:type_name -> base.BaseResponse
-	21, // 7: auth.v1.RefreshTokenRes.base:type_name -> base.BaseResponse
-	11, // 8: auth.v1.Generate2FARes.secret:type_name -> auth.v1.TwoFactorSecret
-	21, // 9: auth.v1.Generate2FARes.base:type_name -> base.BaseResponse
-	21, // 10: auth.v1.Enable2FARes.base:type_name -> base.BaseResponse
-	21, // 11: auth.v1.Disable2FARes.base:type_name -> base.BaseResponse
-	18, // 12: auth.v1.GetCurrencyListRes.currencies:type_name -> auth.v1.CurrencyInfo
-	21, // 13: auth.v1.GetCurrencyListRes.base:type_name -> base.BaseResponse
+	22, // 5: auth.v1.RegisterRes.base:type_name -> base.BaseResponse
+	22, // 6: auth.v1.LogoutRes.base:type_name -> base.BaseResponse
+	22, // 7: auth.v1.RefreshTokenRes.base:type_name -> base.BaseResponse
+	12, // 8: auth.v1.Generate2FARes.secret:type_name -> auth.v1.TwoFactorSecret
+	22, // 9: auth.v1.Generate2FARes.base:type_name -> base.BaseResponse
+	22, // 10: auth.v1.Enable2FARes.base:type_name -> base.BaseResponse
+	22, // 11: auth.v1.Disable2FARes.base:type_name -> base.BaseResponse
+	19, // 12: auth.v1.GetCurrencyListRes.currencies:type_name -> auth.v1.CurrencyInfo
+	22, // 13: auth.v1.GetCurrencyListRes.base:type_name -> base.BaseResponse
 	3,  // 14: auth.v1.AuthService.Login:input_type -> auth.v1.LoginReq
-	5,  // 15: auth.v1.AuthService.Register:input_type -> auth.v1.RegisterReq
-	7,  // 16: auth.v1.AuthService.Logout:input_type -> auth.v1.LogoutReq
-	9,  // 17: auth.v1.AuthService.RefreshToken:input_type -> auth.v1.RefreshTokenReq
-	12, // 18: auth.v1.AuthService.Generate2FA:input_type -> auth.v1.Generate2FAReq
-	14, // 19: auth.v1.AuthService.Enable2FA:input_type -> auth.v1.Enable2FAReq
-	16, // 20: auth.v1.AuthService.Disable2FA:input_type -> auth.v1.Disable2FAReq
-	0,  // 21: auth.v1.AuthService.UpdatePassword:input_type -> auth.v1.UpdatePasswordReq
-	19, // 22: auth.v1.AuthService.GetCurrencyList:input_type -> auth.v1.GetCurrencyListReq
-	4,  // 23: auth.v1.AuthService.Login:output_type -> auth.v1.LoginRes
-	6,  // 24: auth.v1.AuthService.Register:output_type -> auth.v1.RegisterRes
-	8,  // 25: auth.v1.AuthService.Logout:output_type -> auth.v1.LogoutRes
-	10, // 26: auth.v1.AuthService.RefreshToken:output_type -> auth.v1.RefreshTokenRes
-	13, // 27: auth.v1.AuthService.Generate2FA:output_type -> auth.v1.Generate2FARes
-	15, // 28: auth.v1.AuthService.Enable2FA:output_type -> auth.v1.Enable2FARes
-	17, // 29: auth.v1.AuthService.Disable2FA:output_type -> auth.v1.Disable2FARes
-	1,  // 30: auth.v1.AuthService.UpdatePassword:output_type -> auth.v1.UpdatePasswordRes
-	20, // 31: auth.v1.AuthService.GetCurrencyList:output_type -> auth.v1.GetCurrencyListRes
-	23, // [23:32] is the sub-list for method output_type
-	14, // [14:23] is the sub-list for method input_type
+	5,  // 15: auth.v1.AuthService.DemoLogin:input_type -> auth.v1.DemoLoginReq
+	6,  // 16: auth.v1.AuthService.Register:input_type -> auth.v1.RegisterReq
+	8,  // 17: auth.v1.AuthService.Logout:input_type -> auth.v1.LogoutReq
+	10, // 18: auth.v1.AuthService.RefreshToken:input_type -> auth.v1.RefreshTokenReq
+	13, // 19: auth.v1.AuthService.Generate2FA:input_type -> auth.v1.Generate2FAReq
+	15, // 20: auth.v1.AuthService.Enable2FA:input_type -> auth.v1.Enable2FAReq
+	17, // 21: auth.v1.AuthService.Disable2FA:input_type -> auth.v1.Disable2FAReq
+	0,  // 22: auth.v1.AuthService.UpdatePassword:input_type -> auth.v1.UpdatePasswordReq
+	20, // 23: auth.v1.AuthService.GetCurrencyList:input_type -> auth.v1.GetCurrencyListReq
+	4,  // 24: auth.v1.AuthService.Login:output_type -> auth.v1.LoginRes
+	4,  // 25: auth.v1.AuthService.DemoLogin:output_type -> auth.v1.LoginRes
+	7,  // 26: auth.v1.AuthService.Register:output_type -> auth.v1.RegisterRes
+	9,  // 27: auth.v1.AuthService.Logout:output_type -> auth.v1.LogoutRes
+	11, // 28: auth.v1.AuthService.RefreshToken:output_type -> auth.v1.RefreshTokenRes
+	14, // 29: auth.v1.AuthService.Generate2FA:output_type -> auth.v1.Generate2FARes
+	16, // 30: auth.v1.AuthService.Enable2FA:output_type -> auth.v1.Enable2FARes
+	18, // 31: auth.v1.AuthService.Disable2FA:output_type -> auth.v1.Disable2FARes
+	1,  // 32: auth.v1.AuthService.UpdatePassword:output_type -> auth.v1.UpdatePasswordRes
+	21, // 33: auth.v1.AuthService.GetCurrencyList:output_type -> auth.v1.GetCurrencyListRes
+	24, // [24:34] is the sub-list for method output_type
+	14, // [14:24] is the sub-list for method input_type
 	14, // [14:14] is the sub-list for extension type_name
 	14, // [14:14] is the sub-list for extension extendee
 	0,  // [0:14] is the sub-list for field type_name
@@ -1262,7 +1303,7 @@ func file_auth_v1_auth_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_auth_v1_auth_proto_rawDesc), len(file_auth_v1_auth_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   21,
+			NumMessages:   22,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
