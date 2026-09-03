@@ -45,6 +45,9 @@ var (
 			if err := boot.InitALE(ctx); err != nil {
 				return err
 			}
+			if err := boot.StartupReconcile(ctx); err != nil {
+				return err
+			}
 
 			// Account balances are committed atomically with transactions and must not
 			// be silently rewritten during startup. Rebuild derived dashboard data
