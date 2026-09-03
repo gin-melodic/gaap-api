@@ -63,6 +63,15 @@ type DashboardRefreshPayload struct {
 // Called after any transaction or account balance mutation.
 // It's fire-and-forget — dashboard still serves stale snapshot on failure.
 func PublishDashboardRefresh(ctx context.Context, userId string, reason string) {
+	// Remove both cache tiers before publishing. An immediate dashboard read
+	// must not restore a stale persisted snapshot while the worker is debouncing.
+	invalidateDashboardSnapshots(ctx, userId)
+
+	client := mq.GetRabbitMQ()
+	if !client.IsConnected() {
+		return
+	}
+
 	payload := DashboardRefreshPayload{
 		UserId: userId,
 		Reason: reason,
@@ -78,14 +87,21 @@ func PublishDashboardRefresh(ctx context.Context, userId string, reason string) 
 		Payload: payloadBytes,
 	}
 
-	if err := mq.GetRabbitMQ().Publish(ctx, mq.QueueDashboard, msg); err != nil {
+	if err := client.Publish(ctx, mq.QueueDashboard, msg); err != nil {
 		g.Log().Warningf(ctx, "Failed to publish dashboard refresh (will recalculate on next request): %v", err)
-		// Fallback: invalidate snapshot cache so next request triggers a fresh DB load
-		_ = utils.InvalidateCache(ctx,
-			summarySnapshotKey(userId),
-			monthlySnapshotKey(userId),
-			trendSnapshotKey(userId),
-		)
+	}
+}
+
+func invalidateDashboardSnapshots(ctx context.Context, userId string) {
+	_ = utils.InvalidateCache(ctx,
+		summarySnapshotKey(userId),
+		monthlySnapshotKey(userId),
+		trendSnapshotKey(userId),
+	)
+	if _, err := dao.DashboardSnapshots.Ctx(ctx).
+		Where(dao.DashboardSnapshots.Columns().UserId, userId).
+		Delete(); err != nil {
+		g.Log().Warningf(ctx, "Failed to invalidate persisted dashboard snapshots for user %s: %v", userId, err)
 	}
 }
 
@@ -119,48 +135,107 @@ func GetMonthlySnapshot(ctx context.Context, userId string) (*model.MonthlyStats
 	)
 }
 
-// GetTrendSnapshot reads the balance trend from Redis snapshot.
-func GetTrendSnapshot(ctx context.Context, userId string, accounts []uuid.UUID) ([]model.DailyBalance, error) {
+// GetTrendSnapshot reads the complete rolling two-year trend snapshot and
+// returns only the requested inclusive date range and accounts.
+func GetTrendSnapshot(
+	ctx context.Context,
+	userId string,
+	accounts []uuid.UUID,
+	startDate time.Time,
+	endDate time.Time,
+) ([]model.DailyBalance, error) {
 	key := trendSnapshotKey(userId)
+	today := startOfLocalDay(time.Now())
+	snapshotStart := today.AddDate(-2, 0, 0)
 
 	client, err := internalRedis.GetCacheClient(ctx)
 	if err != nil {
 		g.Log().Warningf(ctx, "Redis unavailable for trend snapshot, trying DB: %v", err)
-		// Try DB
 		dbResult, dbErr := LoadSnapshotFromDB[[]model.DailyBalance](ctx, userId, SnapshotTypeTrend, "")
-		if dbErr == nil && dbResult != nil {
-			return *dbResult, nil
+		if dbErr == nil && dbResult != nil && trendSnapshotCovers(*dbResult, snapshotStart, today) {
+			return sliceTrendSnapshot(*dbResult, accounts, startDate, endDate), nil
 		}
 		svc := New()
-		return svc.loadBalanceTrendFromDB(ctx, userId, accounts)
+		result, loadErr := svc.loadBalanceTrendFromDB(ctx, userId, nil, snapshotStart, today)
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		return sliceTrendSnapshot(result, accounts, startDate, endDate), nil
 	}
 
 	// 1st: Redis
 	cached, err := client.Get(ctx, key)
 	if err == nil && !cached.IsNil() {
 		var result []model.DailyBalance
-		if jsonErr := json.Unmarshal(cached.Bytes(), &result); jsonErr == nil {
-			return result, nil
+		if jsonErr := json.Unmarshal(cached.Bytes(), &result); jsonErr == nil && trendSnapshotCovers(result, snapshotStart, today) {
+			return sliceTrendSnapshot(result, accounts, startDate, endDate), nil
 		}
 	}
 
 	// 2nd: DB
 	dbResult, dbErr := LoadSnapshotFromDB[[]model.DailyBalance](ctx, userId, SnapshotTypeTrend, "")
-	if dbErr == nil && dbResult != nil {
+	if dbErr == nil && dbResult != nil && trendSnapshotCovers(*dbResult, snapshotStart, today) {
 		g.Log().Debugf(ctx, "Trend snapshot HIT (DB) for user %s", userId)
 		go writeTrendSnapshot(client, key, *dbResult)
-		return *dbResult, nil
+		return sliceTrendSnapshot(*dbResult, accounts, startDate, endDate), nil
 	}
 
 	// 3rd: Full recompute
 	svc := New()
-	result, err := svc.loadBalanceTrendFromDB(ctx, userId, accounts)
+	result, err := svc.loadBalanceTrendFromDB(ctx, userId, nil, snapshotStart, today)
 	if err != nil {
 		return nil, err
 	}
 
 	go writeTrendSnapshot(client, key, result)
-	return result, nil
+	return sliceTrendSnapshot(result, accounts, startDate, endDate), nil
+}
+
+func trendSnapshotCovers(data []model.DailyBalance, startDate time.Time, endDate time.Time) bool {
+	if len(data) == 0 {
+		return false
+	}
+	expectedDays := 0
+	for date := startDate; !date.After(endDate); date = date.AddDate(0, 0, 1) {
+		expectedDays++
+	}
+	return len(data) == expectedDays &&
+		data[0].Date == startDate.Format("2006-01-02") &&
+		data[len(data)-1].Date == endDate.Format("2006-01-02")
+}
+
+func sliceTrendSnapshot(
+	data []model.DailyBalance,
+	accounts []uuid.UUID,
+	startDate time.Time,
+	endDate time.Time,
+) []model.DailyBalance {
+	accountSet := make(map[string]struct{}, len(accounts))
+	for _, accountID := range accounts {
+		accountSet[accountID.String()] = struct{}{}
+	}
+
+	startValue := startDate.Format("2006-01-02")
+	endValue := endDate.Format("2006-01-02")
+	result := make([]model.DailyBalance, 0)
+	for _, day := range data {
+		if day.Date < startValue || day.Date > endValue {
+			continue
+		}
+		if len(accountSet) == 0 {
+			result = append(result, day)
+			continue
+		}
+
+		balances := make(map[string]model.DailyAccountBalance, len(accountSet))
+		for accountID := range accountSet {
+			if balance, ok := day.Balances[accountID]; ok {
+				balances[accountID] = balance
+			}
+		}
+		result = append(result, model.DailyBalance{Date: day.Date, Balances: balances})
+	}
+	return result
 }
 
 // ─── Public: Snapshot Rebuild (called by MQ worker) ──────────────────────────
@@ -191,7 +266,8 @@ func RebuildSnapshots(ctx context.Context, userId string) error {
 	}
 
 	// 3. Rebuild balance trend (all accounts)
-	trend, err := svc.loadBalanceTrendFromDB(ctx, userId, nil)
+	today := startOfLocalDay(time.Now())
+	trend, err := svc.loadBalanceTrendFromDB(ctx, userId, nil, today.AddDate(-2, 0, 0), today)
 	if err != nil {
 		return gerror.Wrapf(err, "failed to rebuild trend snapshot for user %s", userId)
 	}
@@ -250,10 +326,10 @@ func getOrBuildSnapshot[T any](
 	if err == nil && !cached.IsNil() {
 		var result T
 		if jsonErr := json.Unmarshal(cached.Bytes(), &result); jsonErr == nil {
-			g.Log().Debugf(ctx, "Snapshot HIT (Redis): %s", key)
+			g.Log().Debug(ctx, "Dashboard snapshot cache hit")
 			return &result, nil
 		}
-		g.Log().Warningf(ctx, "Snapshot unmarshal failed for key %s, trying DB", key)
+		g.Log().Warning(ctx, "Dashboard snapshot cache decode failed, trying database")
 	}
 
 	// 2nd: Try read from DB
@@ -273,7 +349,7 @@ func getOrBuildSnapshot[T any](
 	}
 
 	// 3rd: Full recompute from transactional data
-	g.Log().Debugf(ctx, "Snapshot MISS (Redis+DB): %s, computing from source", key)
+	g.Log().Debug(ctx, "Dashboard snapshot cache miss, computing from source")
 	result, err := loader(ctx)
 	if err != nil {
 		return nil, err
@@ -330,11 +406,22 @@ func writeTrendSnapshot(client *gredis.Redis, key string, data []model.DailyBala
 
 // ─── loadBalanceTrendFromDB extracted from original GetBalanceTrend ───────────
 
-func (s *sDashboard) loadBalanceTrendFromDB(ctx context.Context, userId string, accounts []uuid.UUID) ([]model.DailyBalance, error) {
-	now := time.Now()
-	endDate := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 999999999, now.Location())
-	startDate := endDate.AddDate(0, 0, -29)
-	startOfDay := time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, startDate.Location())
+type accountBalance struct {
+	Id           uuid.UUID
+	BalanceUnits int64
+	BalanceNanos int
+	CurrencyCode string
+}
+
+func (s *sDashboard) loadBalanceTrendFromDB(
+	ctx context.Context,
+	userId string,
+	accounts []uuid.UUID,
+	startDate time.Time,
+	endDate time.Time,
+) ([]model.DailyBalance, error) {
+	startOfDay := startOfLocalDay(startDate)
+	endOfDay := time.Date(endDate.Year(), endDate.Month(), endDate.Day(), 23, 59, 59, 999999999, endDate.Location())
 
 	// If no specific accounts requested, get all user's non-group accounts
 	if len(accounts) == 0 {
@@ -354,17 +441,11 @@ func (s *sDashboard) loadBalanceTrendFromDB(ctx context.Context, userId string, 
 	}
 
 	if len(accounts) == 0 {
-		return []model.DailyBalance{}, nil
+		return calculateBalanceTrend(startOfDay, endOfDay, map[uuid.UUID]accountBalance{}, nil), nil
 	}
 
 	// 1. Get CURRENT balances for these accounts
-	type AccountBalance struct {
-		Id           uuid.UUID
-		BalanceUnits int64
-		BalanceNanos int
-		CurrencyCode string
-	}
-	currentBalances := make(map[uuid.UUID]AccountBalance)
+	currentBalances := make(map[uuid.UUID]accountBalance)
 	var accountRecs []entity.Accounts
 	err := dao.Accounts.Ctx(ctx).
 		WhereIn(dao.Accounts.Columns().Id, accounts).
@@ -374,7 +455,7 @@ func (s *sDashboard) loadBalanceTrendFromDB(ctx context.Context, userId string, 
 		return nil, gerror.Wrap(err, "failed to get account balances")
 	}
 	for _, acc := range accountRecs {
-		currentBalances[acc.Id] = AccountBalance{
+		currentBalances[acc.Id] = accountBalance{
 			Id:           acc.Id,
 			BalanceUnits: acc.BalanceUnits,
 			BalanceNanos: acc.BalanceNanos,
@@ -389,7 +470,8 @@ func (s *sDashboard) loadBalanceTrendFromDB(ctx context.Context, userId string, 
 	err = dao.Transactions.Ctx(ctx).
 		WhereIn(dao.Transactions.Columns().FromAccountId, accounts).
 		WhereGTE(dao.Transactions.Columns().Date, startOfDay).
-		Limit(10000).
+		WhereLTE(dao.Transactions.Columns().Date, endOfDay).
+		WhereNull(dao.Transactions.Columns().DeletedAt).
 		Scan(&fromTrans)
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to get from transactions")
@@ -398,7 +480,8 @@ func (s *sDashboard) loadBalanceTrendFromDB(ctx context.Context, userId string, 
 	err = dao.Transactions.Ctx(ctx).
 		WhereIn(dao.Transactions.Columns().ToAccountId, accounts).
 		WhereGTE(dao.Transactions.Columns().Date, startOfDay).
-		Limit(10000).
+		WhereLTE(dao.Transactions.Columns().Date, endOfDay).
+		WhereNull(dao.Transactions.Columns().DeletedAt).
 		Scan(&toTrans)
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to get to transactions")
@@ -417,6 +500,18 @@ func (s *sDashboard) loadBalanceTrendFromDB(ctx context.Context, userId string, 
 	for _, t := range txMap {
 		transactions = append(transactions, t)
 	}
+
+	return calculateBalanceTrend(startOfDay, endOfDay, currentBalances, transactions), nil
+}
+
+func calculateBalanceTrend(
+	startDate time.Time,
+	endDate time.Time,
+	currentBalances map[uuid.UUID]accountBalance,
+	transactions []entity.Transactions,
+) []model.DailyBalance {
+	startOfDay := startOfLocalDay(startDate)
+	endOfDay := time.Date(endDate.Year(), endDate.Month(), endDate.Day(), 23, 59, 59, 999999999, endDate.Location())
 
 	// Create a map of Date -> Transactions
 	transactionsByDate := make(map[string][]entity.Transactions)
@@ -441,7 +536,7 @@ func (s *sDashboard) loadBalanceTrendFromDB(ctx context.Context, userId string, 
 
 	dailyMap := make(map[string]map[string]model.DailyAccountBalance)
 
-	cursorDate := endDate
+	cursorDate := endOfDay
 	for !cursorDate.Before(startOfDay) {
 		dateStr := cursorDate.Format("2006-01-02")
 
@@ -490,7 +585,7 @@ func (s *sDashboard) loadBalanceTrendFromDB(ctx context.Context, userId string, 
 
 	// 4. Construct final output (sorted by date)
 	out := make([]model.DailyBalance, 0)
-	for d := startOfDay; !d.After(endDate); d = d.AddDate(0, 0, 1) {
+	for d := startOfDay; !d.After(endOfDay); d = d.AddDate(0, 0, 1) {
 		dateStr := d.Format("2006-01-02")
 		if bals, ok := dailyMap[dateStr]; ok {
 			out = append(out, model.DailyBalance{
@@ -505,5 +600,9 @@ func (s *sDashboard) loadBalanceTrendFromDB(ctx context.Context, userId string, 
 		}
 	}
 
-	return out, nil
+	return out
+}
+
+func startOfLocalDay(value time.Time) time.Time {
+	return time.Date(value.Year(), value.Month(), value.Day(), 0, 0, 0, 0, value.Location())
 }

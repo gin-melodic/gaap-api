@@ -19,16 +19,11 @@ ON CONFLICT (id) DO UPDATE SET
 
 -- Currencies
 INSERT INTO currencies (code) VALUES
-('USD'),
-('EUR'),
-('GBP'),
-('JPY'),
-('CHF'),
-('CAD'),
-('AUD'),
-('NZD'),
 ('CNY'),
-('RMB')
+('USD'),
+('HKD'),
+('EUR'),
+('JPY')
 ON CONFLICT (code) DO NOTHING;
 
 -- Account Types

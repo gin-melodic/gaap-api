@@ -25,7 +25,7 @@ import (
 var accountColumns = []string{
 	"id", "user_id", "parent_id", "name", "type", "is_group",
 	"currency_code", "balance_units", "balance_nanos", "balance_decimal",
-	"default_child_id", "date", "number", "remarks",
+	"default_child_id", "equity_account_id", "date", "number", "remarks",
 	"created_at", "updated_at", "deleted_at",
 }
 
@@ -64,7 +64,7 @@ func Test_Account_GetAccount(t *testing.T) {
 		rows := sqlmock.NewRows(accountColumns).AddRow(
 			accountId.String(), userId.String(), nil, "Checking Account", AccountTypeAsset, false,
 			"USD", int64(1000), 500000000, 1000.5, // 1000 units + 0.5 nanos = 1000.50
-			nil, "2023-01-01", "CHK-001", "Main checking",
+			nil, nil, "2023-01-01", "CHK-001", "Main checking",
 			"2023-01-01", "2023-01-01", nil,
 		)
 
@@ -134,7 +134,7 @@ func Test_Account_GetAccount_WrongUser(t *testing.T) {
 		rows := sqlmock.NewRows(accountColumns).AddRow(
 			accountId.String(), ownerUserId.String(), nil, "Private Account", AccountTypeAsset, false,
 			"USD", int64(50000), 0, 50000.0,
-			nil, "2023-01-01", "", "",
+			nil, nil, "2023-01-01", "", "",
 			"2023-01-01", "2023-01-01", nil,
 		)
 
@@ -212,11 +212,11 @@ func Test_BalanceRestriction_AccountTypes(t *testing.T) {
 func Test_AccountingEquation_BasicBalance(t *testing.T) {
 	gtest.C(t, func(g *gtest.T) {
 		// Setup: A user has $10,000 in assets
-		assets := decimal.NewFromFloat(10000.00)
+		assets := decimal.RequireFromString("10000.00")
 		// $3,000 in credit card debt (liability)
-		liabilities := decimal.NewFromFloat(3000.00)
+		liabilities := decimal.RequireFromString("3000.00")
 		// Net worth (equity) = Assets - Liabilities = $7,000
-		equity := decimal.NewFromFloat(7000.00)
+		equity := decimal.RequireFromString("7000.00")
 
 		// Assert: Accounting equation holds
 		// Assets = Liabilities + Equity
@@ -239,7 +239,7 @@ func Test_AccountingEquation_OpeningBalance(t *testing.T) {
 
 		// Action: Create new checking account with $5,000 opening balance
 		// This creates a transaction: Equity -> Asset
-		openingBalance := decimal.NewFromFloat(5000.00)
+		openingBalance := decimal.RequireFromString("5000.00")
 
 		// Effect: Asset increases, Equity decreases
 		assets = assets.Add(openingBalance)

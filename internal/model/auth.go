@@ -3,9 +3,10 @@ package model
 import "gaap-api/internal/model/entity"
 
 type LoginInput struct {
-	Email    string `json:"email" v:"required|email"`
-	Password string `json:"password" v:"required|min-length:8"`
-	Code     string `json:"code" v:"length:6,6"` // TOTP code
+	Email               string `json:"email" v:"required|email"`
+	Password            string `json:"password" v:"required|min-length:8"`
+	Code                string `json:"code" v:"length:6,6"` // TOTP code
+	CfTurnstileResponse string `json:"cf_turnstile_response"`
 }
 
 type RegisterInput struct {
@@ -13,6 +14,7 @@ type RegisterInput struct {
 	Password            string `json:"password" v:"required|min-length:8"`
 	Nickname            string `json:"nickname" v:"required|max-length:50"`
 	CfTurnstileResponse string `json:"cf_turnstile_response"`
+	MainCurrency        string `json:"main_currency"`
 }
 
 type AuthResponse struct {

@@ -6,10 +6,11 @@ import (
 
 	"gaap-api/internal/dao"
 	exportPkg "gaap-api/internal/export"
+	"gaap-api/internal/middleware"
 	"gaap-api/internal/model"
-	"gaap-api/internal/model/entity"
 
 	"github.com/gogf/gf/v2/errors/gerror"
+	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/os/gtime"
 	"github.com/google/uuid"
 )
@@ -31,13 +32,16 @@ func (s *sTask) processDataExport(ctx context.Context, payload json.RawMessage) 
 	exportPayload := data.Payload
 
 	// Update task status to running
-	_, err = dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, taskId).Data(entity.Tasks{
-		Status:    model.TaskStatusRunning,
-		StartedAt: gtime.Now(),
+	_, err = dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, taskId).Data(g.Map{
+		dao.Tasks.Columns().Status:    model.TaskStatusRunning,
+		dao.Tasks.Columns().StartedAt: gtime.Now(),
 	}).Update()
 	if err != nil {
 		return gerror.Wrap(err, "failed to update task status")
 	}
+
+	// Add userId to context for GetTask
+	ctx = context.WithValue(ctx, middleware.UserIdKey, exportPayload.UserId.String())
 
 	// Check if task was cancelled
 	task, err := s.GetTask(ctx, taskId)

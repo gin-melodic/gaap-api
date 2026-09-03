@@ -50,9 +50,9 @@ func (s *sDashboard) loadDashboardSummaryFromDB(ctx context.Context, userId stri
 
 	// Sum assets using MoneyHelper for precision
 	var totalAssets *utils.MoneyHelper
-	for i, acc := range assetAccounts {
+	for _, acc := range assetAccounts {
 		accBalance := utils.NewFromEntity(&acc)
-		if i == 0 {
+		if totalAssets == nil {
 			totalAssets = accBalance
 			out.CurrencyCode = acc.CurrencyCode
 		} else {
@@ -81,9 +81,9 @@ func (s *sDashboard) loadDashboardSummaryFromDB(ctx context.Context, userId stri
 
 	// Sum liabilities
 	var totalLiabilities *utils.MoneyHelper
-	for i, acc := range liabilityAccounts {
+	for _, acc := range liabilityAccounts {
 		accBalance := utils.NewFromEntity(&acc)
-		if i == 0 {
+		if totalLiabilities == nil {
 			totalLiabilities = accBalance
 		} else {
 			totalLiabilities, err = totalLiabilities.Add(accBalance)
@@ -197,8 +197,111 @@ func (s *sDashboard) loadMonthlyStatsFromDB(ctx context.Context, userId string) 
 	return out, nil
 }
 
-// GetBalanceTrend returns daily balance snapshots from Redis.
-func (s *sDashboard) GetBalanceTrend(ctx context.Context, accounts []uuid.UUID) (out []model.DailyBalance, err error) {
+// GetBalanceTrend returns inclusive daily balance snapshots for the requested
+// range. Omitting both dates defaults to the past 60 calendar days.
+func (s *sDashboard) GetBalanceTrend(
+	ctx context.Context,
+	accounts []uuid.UUID,
+	startDateValue string,
+	endDateValue string,
+) (out []model.DailyBalance, err error) {
+	now := time.Now()
+	isDefaultRange := startDateValue == "" && endDateValue == ""
+	startDate, endDate, err := resolveTrendDateRange(now, startDateValue, endDateValue)
+	if err != nil {
+		return nil, err
+	}
+
 	userId := utils.RequireUserId(ctx)
-	return GetTrendSnapshot(ctx, userId, accounts)
+	earliestAccountDate, err := loadEarliestTrendAccountDate(ctx, userId, now.Location())
+	if err != nil {
+		return nil, err
+	}
+	startDate, err = enforceEarliestTrendAccountDate(startDate, earliestAccountDate, isDefaultRange)
+	if err != nil {
+		return nil, err
+	}
+	return GetTrendSnapshot(ctx, userId, accounts, startDate, endDate)
+}
+
+func enforceEarliestTrendAccountDate(startDate time.Time, earliestAccountDate *time.Time, isDefaultRange bool) (time.Time, error) {
+	if earliestAccountDate == nil || !startDate.Before(*earliestAccountDate) {
+		return startDate, nil
+	}
+	if !isDefaultRange {
+		return time.Time{}, gerror.New("start date must not be before the first account date")
+	}
+	return *earliestAccountDate, nil
+}
+
+func loadEarliestTrendAccountDate(ctx context.Context, userId string, location *time.Location) (*time.Time, error) {
+	var accounts []entity.Accounts
+	err := dao.Accounts.Ctx(ctx).
+		Where(dao.Accounts.Columns().UserId, userId).
+		Where(dao.Accounts.Columns().IsGroup, false).
+		WhereNull(dao.Accounts.Columns().DeletedAt).
+		Fields(dao.Accounts.Columns().Date, dao.Accounts.Columns().CreatedAt).
+		Scan(&accounts)
+	if err != nil {
+		return nil, gerror.Wrap(err, "failed to load first account date")
+	}
+
+	return earliestTrendAccountDate(accounts, location), nil
+}
+
+func earliestTrendAccountDate(accounts []entity.Accounts, location *time.Location) *time.Time {
+	var earliest *time.Time
+	for _, account := range accounts {
+		var candidate time.Time
+		if account.Date != nil {
+			candidate = account.Date.Time
+		} else if account.CreatedAt != nil {
+			candidate = account.CreatedAt.Time
+		} else {
+			continue
+		}
+		candidate = candidate.In(location)
+		candidate = time.Date(candidate.Year(), candidate.Month(), candidate.Day(), 0, 0, 0, 0, location)
+		if earliest == nil || candidate.Before(*earliest) {
+			value := candidate
+			earliest = &value
+		}
+	}
+	return earliest
+}
+
+func resolveTrendDateRange(now time.Time, startDateValue string, endDateValue string) (time.Time, time.Time, error) {
+	today := startOfLocalDay(now)
+	earliestDate := today.AddDate(-2, 0, 0)
+
+	if startDateValue == "" && endDateValue == "" {
+		return today.AddDate(0, 0, -59), today, nil
+	}
+	if startDateValue == "" || endDateValue == "" {
+		return time.Time{}, time.Time{}, gerror.New("start date and end date must be provided together")
+	}
+
+	startDate, err := time.ParseInLocation("2006-01-02", startDateValue, now.Location())
+	if err != nil {
+		return time.Time{}, time.Time{}, gerror.New("invalid start date format (expected YYYY-MM-DD)")
+	}
+	endDate, err := time.ParseInLocation("2006-01-02", endDateValue, now.Location())
+	if err != nil {
+		return time.Time{}, time.Time{}, gerror.New("invalid end date format (expected YYYY-MM-DD)")
+	}
+
+	if endDate.Before(startDate) {
+		return time.Time{}, time.Time{}, gerror.New("end date must not be before start date")
+	}
+	if endDate.After(today) {
+		return time.Time{}, time.Time{}, gerror.New("end date must not be in the future")
+	}
+	if startDate.Before(earliestDate) {
+		return time.Time{}, time.Time{}, gerror.New("start date must be within the past two years")
+	}
+	if startDate.Before(endDate.AddDate(-2, 0, 0)) {
+		return time.Time{}, time.Time{}, gerror.New("date range cannot exceed two years")
+	}
+
+	return startDate, endDate, nil
 }

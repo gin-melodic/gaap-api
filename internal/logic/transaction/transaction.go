@@ -47,15 +47,14 @@ func (s *sTransaction) ListTransactions(ctx context.Context, in model.Transactio
 		m = m.Where(dao.Transactions.Columns().Type, in.Type)
 	}
 
-	// Sort
-	if in.SortBy != "" {
-		order := in.SortBy
-		if in.SortOrder == "desc" {
-			order += " DESC"
-		} else {
-			order += " ASC"
-		}
-		m = m.Order(order)
+	sortColumn, sortAscending, sortErr := resolveTransactionSort(in.SortBy, in.SortOrder)
+	if sortErr != nil {
+		return nil, 0, sortErr
+	}
+	if sortAscending {
+		m = m.OrderAsc(sortColumn)
+	} else {
+		m = m.OrderDesc(sortColumn)
 	}
 
 	total, err = m.Count()
@@ -72,9 +71,60 @@ func (s *sTransaction) ListTransactions(ctx context.Context, in model.Transactio
 	return entities, total, nil
 }
 
+func resolveTransactionSort(sortBy, sortOrder string) (column string, ascending bool, err error) {
+	sortColumns := map[string]string{
+		"date":       dao.Transactions.Columns().Date,
+		"amount":     dao.Transactions.Columns().BalanceDecimal,
+		"created_at": dao.Transactions.Columns().CreatedAt,
+		"updated_at": dao.Transactions.Columns().UpdatedAt,
+	}
+	if sortBy == "" {
+		sortBy = "date"
+	}
+	column, ok := sortColumns[sortBy]
+	if !ok {
+		return "", false, gerror.New("invalid transaction sort field")
+	}
+	switch sortOrder {
+	case "asc":
+		return column, true, nil
+	case "", "desc":
+		return column, false, nil
+	default:
+		return "", false, gerror.New("invalid transaction sort order")
+	}
+}
+
 // CreateTransaction creates a new transaction.
 // If tx is provided, it will be used for the transaction.
 func (s *sTransaction) CreateTransaction(ctx context.Context, in model.TransactionCreateInput, tx gdb.TX) (out *entity.Transactions, err error) {
+	if err := validateTransactionNote(in.Note); err != nil {
+		return nil, err
+	}
+	if tx != nil {
+		return s.createTransactionInTx(ctx, tx, in)
+	}
+
+	err = g.DB().Transaction(ctx, func(ctx context.Context, dbTx gdb.TX) error {
+		var createErr error
+		out, createErr = s.createTransactionInTx(ctx, dbTx, in)
+		return createErr
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	_ = utils.InvalidateCache(ctx, utils.AccountCacheKey(in.FromAccountId.String()))
+	_ = utils.InvalidateCache(ctx, utils.AccountCacheKey(in.ToAccountId.String()))
+	dashboard.PublishDashboardRefresh(ctx, in.UserId.String(), "tx_create")
+	return out, nil
+}
+
+func (s *sTransaction) createTransactionInTx(ctx context.Context, tx gdb.TX, in model.TransactionCreateInput) (*entity.Transactions, error) {
+	if err := validateTransactionAccounts(ctx, tx, in.UserId.String(), &in); err != nil {
+		return nil, err
+	}
+
 	// Generate UUID7 for the new transaction
 	newId, err := uuid.NewV7()
 	if err != nil {
@@ -99,42 +149,21 @@ func (s *sTransaction) CreateTransaction(ctx context.Context, in model.Transacti
 		Type:          in.Type,
 	}
 
-	transactionTx := tx
-	if transactionTx == nil {
-		ttx, err := g.DB().Begin(ctx)
-		if err != nil {
-			return nil, gerror.Wrap(err, "failed to begin transaction")
-		}
-		transactionTx = ttx
-	}
-
 	// 1. Insert transaction record
-	_, insertErr := transactionTx.Model(dao.Transactions.Table()).FieldsEx(dao.Transactions.Columns().BalanceDecimal, dao.Transactions.Columns().DeletedAt).Data(txEntity).Insert()
+	_, insertErr := tx.Model(dao.Transactions.Table()).FieldsEx(dao.Transactions.Columns().BalanceDecimal, dao.Transactions.Columns().DeletedAt).Data(txEntity).Insert()
 	if insertErr != nil {
 		return nil, gerror.Wrap(insertErr, "failed to insert transaction")
 	}
 
 	// 2. Apply balance changes
-	balanceErr := service.Balance().ApplyTransactionInTx(ctx, transactionTx, &in)
+	balanceErr := service.Balance().ApplyTransactionInTx(ctx, tx, &in)
 	if balanceErr != nil {
 		return nil, gerror.Wrap(balanceErr, "failed to apply balance changes")
 	}
 
-	// 3. Commit transaction if it was created by this function
-	if tx == nil {
-		transactionTx.Commit()
-	}
-
-	// Invalidate related account caches (balance may have changed)
-	_ = utils.InvalidateCache(ctx, utils.AccountCacheKey(in.FromAccountId.String()))
-	_ = utils.InvalidateCache(ctx, utils.AccountCacheKey(in.ToAccountId.String()))
-
-	// Trigger asynchronous dashboard snapshot rebuild
-	dashboard.PublishDashboardRefresh(ctx, in.UserId.String(), "tx_create")
-
 	// Retrieve the created transaction
 	var e entity.Transactions
-	err = dao.Transactions.Ctx(ctx).Where(dao.Transactions.Columns().Id, newId).Scan(&e)
+	err = tx.Model(dao.Transactions.Table()).Where(dao.Transactions.Columns().Id, newId).Scan(&e)
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to retrieve created transaction")
 	}
@@ -145,15 +174,7 @@ func (s *sTransaction) CreateTransaction(ctx context.Context, in model.Transacti
 // GetTransaction returns a transaction by ID with caching.
 func (s *sTransaction) GetTransaction(ctx context.Context, id uuid.UUID) (out *entity.Transactions, err error) {
 	userId := utils.RequireUserId(ctx)
-
-	return utils.GetOrLoad(
-		ctx,
-		utils.TransactionCacheKey(id.String()),
-		utils.CacheTTL.Transaction,
-		func(ctx context.Context) (*entity.Transactions, error) {
-			return s.loadTransactionFromDB(ctx, id, userId)
-		},
-	)
+	return s.loadTransactionFromDB(ctx, id, userId)
 }
 
 // loadTransactionFromDB fetches a transaction directly from the database.
@@ -180,7 +201,7 @@ func (s *sTransaction) getTransactionByIdInTx(ctx context.Context, tx gdb.TX, id
 	if userId != "" {
 		m = m.Where(dao.Transactions.Columns().UserId, userId)
 	}
-	err := m.Scan(&e)
+	err := m.LockUpdate().Scan(&e)
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to get transaction")
 	}
@@ -204,7 +225,11 @@ func (s *sTransaction) getTransactionByIdInTx(ctx context.Context, tx gdb.TX, id
 }
 
 func (s *sTransaction) UpdateTransaction(ctx context.Context, id uuid.UUID, in model.TransactionUpdateInput) (out *entity.Transactions, err error) {
+	if err := validateTransactionNote(in.Note); err != nil {
+		return nil, err
+	}
 	userId := utils.RequireUserId(ctx)
+	var affectedAccountIds []uuid.UUID
 
 	// Use database transaction to ensure atomicity
 	err = g.DB().Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
@@ -212,6 +237,27 @@ func (s *sTransaction) UpdateTransaction(ctx context.Context, id uuid.UUID, in m
 		original, getErr := s.getTransactionByIdInTx(ctx, tx, id, userId)
 		if getErr != nil {
 			return gerror.Wrap(getErr, "failed to get original transaction")
+		}
+		if _, lockErr := lockOwnedAccounts(ctx, tx, userId, []uuid.UUID{
+			original.FromAccountId, original.ToAccountId, in.FromAccountId, in.ToAccountId,
+		}); lockErr != nil {
+			return gerror.Wrap(lockErr, "failed to lock affected accounts")
+		}
+
+		newInput := &model.TransactionCreateInput{
+			UserId:        original.UserId,
+			FromAccountId: in.FromAccountId,
+			ToAccountId:   in.ToAccountId,
+			CurrencyCode:  in.CurrencyCode,
+			BalanceUnits:  in.BalanceUnits,
+			BalanceNanos:  in.BalanceNanos,
+			Type:          in.Type,
+		}
+		if validateErr := validateTransactionAccounts(ctx, tx, userId, newInput); validateErr != nil {
+			return validateErr
+		}
+		affectedAccountIds = []uuid.UUID{
+			original.FromAccountId, original.ToAccountId, in.FromAccountId, in.ToAccountId,
 		}
 
 		// 2. Reverse the original balance effect
@@ -226,7 +272,7 @@ func (s *sTransaction) UpdateTransaction(ctx context.Context, id uuid.UUID, in m
 		if userId != "" {
 			m = m.Where(dao.Transactions.Columns().UserId, userId)
 		}
-		_, updateErr := m.Data(g.Map{
+		updateData := g.Map{
 			dao.Transactions.Columns().FromAccountId: in.FromAccountId,
 			dao.Transactions.Columns().ToAccountId:   in.ToAccountId,
 			dao.Transactions.Columns().CurrencyCode:  in.CurrencyCode,
@@ -234,9 +280,17 @@ func (s *sTransaction) UpdateTransaction(ctx context.Context, id uuid.UUID, in m
 			dao.Transactions.Columns().BalanceNanos:  in.BalanceNanos,
 			dao.Transactions.Columns().Note:          in.Note,
 			dao.Transactions.Columns().Type:          in.Type,
-		}).Update()
+		}
+		if in.Date != "" {
+			updateData[dao.Transactions.Columns().Date] = gtime.NewFromStr(in.Date)
+		}
+		result, updateErr := m.Data(updateData).Update()
 		if updateErr != nil {
 			return gerror.Wrap(updateErr, "failed to update transaction")
+		}
+		rows, rowsErr := result.RowsAffected()
+		if rowsErr != nil || rows != 1 {
+			return gerror.New("transaction update did not affect exactly one row")
 		}
 
 		// 4. Get the updated transaction and apply new balance effect
@@ -245,15 +299,12 @@ func (s *sTransaction) UpdateTransaction(ctx context.Context, id uuid.UUID, in m
 			return gerror.Wrap(getUpdatedErr, "failed to get updated transaction")
 		}
 
-		// Convert to TransactionCreateInput for ApplyTransactionInTx
-		newInput := &model.TransactionCreateInput{
-			FromAccountId: updated.FromAccountId,
-			ToAccountId:   updated.ToAccountId,
-			CurrencyCode:  updated.CurrencyCode,
-			BalanceUnits:  updated.BalanceUnits,
-			BalanceNanos:  updated.BalanceNanos,
-			Type:          updated.Type,
-		}
+		newInput.FromAccountId = updated.FromAccountId
+		newInput.ToAccountId = updated.ToAccountId
+		newInput.CurrencyCode = updated.CurrencyCode
+		newInput.BalanceUnits = updated.BalanceUnits
+		newInput.BalanceNanos = updated.BalanceNanos
+		newInput.Type = updated.Type
 
 		applyErr := service.Balance().ApplyTransactionInTx(ctx, tx, newInput)
 		if applyErr != nil {
@@ -269,6 +320,17 @@ func (s *sTransaction) UpdateTransaction(ctx context.Context, id uuid.UUID, in m
 
 	// Invalidate transaction cache and related account caches
 	_ = utils.InvalidateCache(ctx, utils.TransactionCacheKey(id.String()))
+	seen := make(map[uuid.UUID]struct{})
+	for _, accountId := range affectedAccountIds {
+		if accountId == uuid.Nil {
+			continue
+		}
+		if _, exists := seen[accountId]; exists {
+			continue
+		}
+		seen[accountId] = struct{}{}
+		_ = utils.InvalidateCache(ctx, utils.AccountCacheKey(accountId.String()))
+	}
 
 	// Trigger asynchronous dashboard snapshot rebuild
 	dashboard.PublishDashboardRefresh(ctx, userId, "tx_update")
@@ -278,6 +340,7 @@ func (s *sTransaction) UpdateTransaction(ctx context.Context, id uuid.UUID, in m
 
 func (s *sTransaction) DeleteTransaction(ctx context.Context, id uuid.UUID) (err error) {
 	userId := utils.RequireUserId(ctx)
+	var affectedAccountIds []uuid.UUID
 
 	// Use database transaction to ensure atomicity
 	err = g.DB().Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
@@ -285,6 +348,15 @@ func (s *sTransaction) DeleteTransaction(ctx context.Context, id uuid.UUID) (err
 		original, getErr := s.getTransactionByIdInTx(ctx, tx, id, userId)
 		if getErr != nil {
 			return gerror.Wrap(getErr, "failed to get transaction")
+		}
+		affectedAccountIds = []uuid.UUID{original.FromAccountId, original.ToAccountId}
+		originalInput := &model.TransactionCreateInput{
+			UserId: original.UserId, FromAccountId: original.FromAccountId, ToAccountId: original.ToAccountId,
+			CurrencyCode: original.CurrencyCode, BalanceUnits: original.BalanceUnits,
+			BalanceNanos: original.BalanceNanos, Type: original.Type,
+		}
+		if validateErr := validateTransactionAccounts(ctx, tx, userId, originalInput); validateErr != nil {
+			return validateErr
 		}
 
 		// 2. Reverse the balance effect
@@ -298,9 +370,13 @@ func (s *sTransaction) DeleteTransaction(ctx context.Context, id uuid.UUID) (err
 		if userId != "" {
 			m = m.Where(dao.Transactions.Columns().UserId, userId)
 		}
-		_, deleteErr := m.Unscoped().Delete()
+		result, deleteErr := m.Unscoped().Delete()
 		if deleteErr != nil {
 			return gerror.Wrap(deleteErr, "failed to delete transaction")
+		}
+		rows, rowsErr := result.RowsAffected()
+		if rowsErr != nil || rows != 1 {
+			return gerror.New("transaction delete did not affect exactly one row")
 		}
 
 		return nil
@@ -309,6 +385,9 @@ func (s *sTransaction) DeleteTransaction(ctx context.Context, id uuid.UUID) (err
 	if err == nil {
 		// Invalidate transaction cache
 		_ = utils.InvalidateCache(ctx, utils.TransactionCacheKey(id.String()))
+		for _, accountId := range affectedAccountIds {
+			_ = utils.InvalidateCache(ctx, utils.AccountCacheKey(accountId.String()))
+		}
 
 		// Trigger asynchronous dashboard snapshot rebuild
 		dashboard.PublishDashboardRefresh(ctx, userId, "tx_delete")

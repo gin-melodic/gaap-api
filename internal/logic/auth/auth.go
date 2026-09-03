@@ -2,15 +2,16 @@ package auth
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
+	"net/mail"
 	"os"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"gaap-api/internal/ale"
 	"gaap-api/internal/dao"
+	"gaap-api/internal/logic/demo_data"
 	"gaap-api/internal/logic/utils"
 	"gaap-api/internal/model"
 	"gaap-api/internal/model/entity"
@@ -80,12 +81,42 @@ func getJwtSecret(ctx context.Context) []byte {
 }
 
 func (s *sAuth) Login(ctx context.Context, in model.LoginInput) (out *model.AuthResponse, err error) {
-	if in.Email == "" || in.Password == "" { // Check if email and password are provided
+	return s.login(ctx, in, false)
+}
+
+// DemoLogin authenticates the configured demo user without requiring a
+// browser-supplied password or Turnstile token.
+func (s *sAuth) DemoLogin(ctx context.Context) (out *model.AuthResponse, err error) {
+	config, err := demo_data.LoadConfig(ctx)
+	if err != nil || !config.OnlineDemoEnabled {
+		return nil, gerror.New("demo login unavailable")
+	}
+	return s.login(ctx, model.LoginInput{
+		Email:    config.UserEmail,
+		Password: config.UserPassword,
+	}, true)
+}
+
+func (s *sAuth) login(ctx context.Context, in model.LoginInput, skipTurnstile bool) (out *model.AuthResponse, err error) {
+	in.Email = strings.ToLower(strings.TrimSpace(in.Email))
+	if in.Email == "" || in.Password == "" {
 		return nil, gerror.New("email and password are required")
+	}
+	if skipTurnstile {
+		// The demo credentials came from the API process environment, never the browser.
+	} else if in.CfTurnstileResponse == "" {
+		if isProductionEnvironment() {
+			return nil, gerror.New("invalid email or password")
+		}
+	} else if !verifyTurnstile(ctx, in.CfTurnstileResponse) {
+		return nil, gerror.New("invalid email or password")
 	}
 
 	var user *entity.Users
-	err = dao.Users.Ctx(ctx).Where(dao.Users.Columns().Email, in.Email).Scan(&user)
+	err = dao.Users.Ctx(ctx).
+		Where(dao.Users.Columns().Email, in.Email).
+		WhereNull(dao.Users.Columns().DeletedAt).
+		Scan(&user)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +124,7 @@ func (s *sAuth) Login(ctx context.Context, in model.LoginInput) (out *model.Auth
 		return nil, gerror.New("invalid email or password")
 	}
 
-	// Verify password (frontend sends SHA-256 hash, stored password is bcrypt hash of SHA-256)
+	// The password arrives inside ALE and is hashed only on the server.
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(in.Password)); err != nil {
 		return nil, gerror.New("invalid email or password")
 	}
@@ -110,17 +141,16 @@ func (s *sAuth) Login(ctx context.Context, in model.LoginInput) (out *model.Auth
 	}
 
 	// Generate Token Pair
-	accessToken, refreshToken, err := generateTokenPair(ctx, user.Id.String())
+	sessionId := uuid.NewString()
+	accessToken, refreshToken, err := generateTokenPair(ctx, user.Id.String(), sessionId)
 	if err != nil {
 		return nil, err
 	}
 
 	// Generate ALE session key
-	sessionKey, err := ale.GenerateAndStoreSessionKey(ctx, user.Id.String())
+	sessionKey, err := ale.GenerateAndStoreSessionKey(ctx, user.Id.String(), sessionId)
 	if err != nil {
-		g.Log().Warningf(ctx, "Failed to generate ALE session key: %v", err)
-		// Don't fail login if session key generation fails
-		sessionKey = ""
+		return nil, gerror.Wrap(err, "failed to establish secure session")
 	}
 
 	out = &model.AuthResponse{
@@ -134,18 +164,23 @@ func (s *sAuth) Login(ctx context.Context, in model.LoginInput) (out *model.Auth
 }
 
 func (s *sAuth) Register(ctx context.Context, in model.RegisterInput) (out *model.AuthResponse, err error) {
+	in.Email = strings.ToLower(strings.TrimSpace(in.Email))
+	if err := validateRegistrationInput(&in); err != nil {
+		return nil, err
+	}
+	if !isRegistrationEmailAllowed(in.Email) {
+		return nil, gerror.New("registration unavailable")
+	}
+
 	// Verify Turnstile
 	if in.CfTurnstileResponse == "" {
-		// For development, we might skip if configured, but for now enforce it or check config
-		// return nil, errors.New("turnstile token required")
+		if isProductionEnvironment() {
+			return nil, gerror.New("registration unavailable")
+		}
 	} else {
 		if !verifyTurnstile(ctx, in.CfTurnstileResponse) {
 			return nil, gerror.New("invalid turnstile token")
 		}
-	}
-
-	if in.Email == "" {
-		return nil, gerror.New("email is required")
 	}
 
 	// Check email
@@ -154,14 +189,30 @@ func (s *sAuth) Register(ctx context.Context, in model.RegisterInput) (out *mode
 		return nil, gerror.Wrap(err, "failed to check email")
 	}
 	if count > 0 {
-		return nil, gerror.New("email already exists")
+		return nil, gerror.New("registration unavailable")
 	}
 
-	// Hash password
-	hashedPwd := sha256.Sum256([]byte(in.Password))
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(hex.EncodeToString(hashedPwd[:])), bcrypt.DefaultCost)
+	// Hash the ALE-protected password on the server.
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, gerror.Wrap(err, "failed to hash password")
+	}
+
+	mainCurrency := strings.ToUpper(strings.TrimSpace(in.MainCurrency))
+	if mainCurrency == "" {
+		mainCurrency = "USD"
+	}
+
+	currencyColumns := dao.Currencies.Columns()
+	currencyCount, err := dao.Currencies.Ctx(ctx).
+		Where(currencyColumns.Code, mainCurrency).
+		WhereNull(currencyColumns.DeletedAt).
+		Count()
+	if err != nil {
+		return nil, gerror.Wrap(err, "failed to validate main currency")
+	}
+	if currencyCount == 0 {
+		return nil, gerror.New("invalid main currency")
 	}
 
 	// Create user
@@ -169,8 +220,9 @@ func (s *sAuth) Register(ctx context.Context, in model.RegisterInput) (out *mode
 		Id:           uuid.New(),
 		Email:        in.Email,
 		Password:     string(hashedPassword),
+		Nickname:     in.Nickname,
 		Plan:         utils.UserLevelFree,
-		MainCurrency: "USD",
+		MainCurrency: mainCurrency,
 	}
 	// Try to get a default theme
 	var theme *entity.Themes
@@ -204,17 +256,16 @@ func (s *sAuth) Register(ctx context.Context, in model.RegisterInput) (out *mode
 	}
 
 	// Generate Token Pair
-	accessToken, refreshToken, err := generateTokenPair(ctx, user.Id.String())
+	sessionId := uuid.NewString()
+	accessToken, refreshToken, err := generateTokenPair(ctx, user.Id.String(), sessionId)
 	if err != nil {
 		return nil, err
 	}
 
 	// Generate ALE session key
-	sessionKey, err := ale.GenerateAndStoreSessionKey(ctx, user.Id.String())
+	sessionKey, err := ale.GenerateAndStoreSessionKey(ctx, user.Id.String(), sessionId)
 	if err != nil {
-		g.Log().Warningf(ctx, "Failed to generate ALE session key: %v", err)
-		// Don't fail registration if session key generation fails
-		sessionKey = ""
+		return nil, gerror.Wrap(err, "failed to establish secure session")
 	}
 
 	out = &model.AuthResponse{
@@ -227,8 +278,34 @@ func (s *sAuth) Register(ctx context.Context, in model.RegisterInput) (out *mode
 	return
 }
 
+func validateRegistrationInput(in *model.RegisterInput) error {
+	if len(in.Email) > 255 {
+		return gerror.New("email must not exceed 255 characters")
+	}
+	if !strings.Contains(in.Email, "@") {
+		return gerror.New("invalid email address")
+	}
+	parsed, err := mail.ParseAddress(in.Email)
+	if err != nil || !strings.EqualFold(parsed.Address, in.Email) {
+		return gerror.New("invalid email address")
+	}
+	passwordLength := utf8.RuneCountInString(in.Password)
+	if passwordLength < 8 || passwordLength > 100 {
+		return gerror.New("password must contain between 8 and 100 characters")
+	}
+	in.Nickname = strings.TrimSpace(in.Nickname)
+	nicknameLength := utf8.RuneCountInString(in.Nickname)
+	if nicknameLength == 0 || nicknameLength > 50 {
+		return gerror.New("nickname must contain between 1 and 50 characters")
+	}
+	return nil
+}
+
 func (s *sAuth) Generate2FA(ctx context.Context) (out *model.TwoFactorSecret, err error) {
 	userId := utils.RequireUserId(ctx)
+	if err := rejectDemoSecurityChange(ctx, userId); err != nil {
+		return nil, err
+	}
 
 	var user *entity.Users
 	err = dao.Users.Ctx(ctx).Where(dao.Users.Columns().Id, userId).Scan(&user)
@@ -265,6 +342,9 @@ func (s *sAuth) Generate2FA(ctx context.Context) (out *model.TwoFactorSecret, er
 
 func (s *sAuth) Enable2FA(ctx context.Context, code string) (err error) {
 	userId := utils.RequireUserId(ctx)
+	if err := rejectDemoSecurityChange(ctx, userId); err != nil {
+		return err
+	}
 
 	var user *entity.Users
 	err = dao.Users.Ctx(ctx).Where(dao.Users.Columns().Id, userId).Scan(&user)
@@ -289,6 +369,9 @@ func (s *sAuth) Enable2FA(ctx context.Context, code string) (err error) {
 
 func (s *sAuth) Disable2FA(ctx context.Context, code string, password string) (err error) {
 	userId := utils.RequireUserId(ctx)
+	if err := rejectDemoSecurityChange(ctx, userId); err != nil {
+		return err
+	}
 
 	var user *entity.Users
 	err = dao.Users.Ctx(ctx).Where(dao.Users.Columns().Id, userId).Scan(&user)
@@ -349,8 +432,17 @@ func (s *sAuth) RefreshToken(ctx context.Context, refreshTokenStr string) (out *
 	if !ok || userId == "" {
 		return nil, gerror.New("invalid token: missing userId")
 	}
+	sessionId, ok := claims["sid"].(string)
+	if !ok || sessionId == "" {
+		return nil, gerror.New("invalid token: missing session")
+	}
 
-	accessToken, newRefreshToken, err := generateTokenPair(ctx, userId)
+	sessionKey, err := ale.GetSessionKey(ctx, userId, sessionId)
+	if err != nil {
+		return nil, gerror.New("secure session expired, please login again")
+	}
+
+	accessToken, newRefreshToken, err := generateTokenPair(ctx, userId, sessionId)
 	if err != nil {
 		return nil, err
 	}
@@ -360,13 +452,9 @@ func (s *sAuth) RefreshToken(ctx context.Context, refreshTokenStr string) (out *
 	AddToBlacklist(refreshTokenStr, time.Unix(int64(exp), 0))
 
 	// Refresh ALE session key TTL
-	if err := ale.RefreshSessionKeyTTL(ctx, userId); err != nil {
-		g.Log().Warningf(ctx, "Failed to refresh ALE session key TTL: %v", err)
-		// Don't fail refresh if session key TTL refresh fails
+	if err := ale.RefreshSessionKeyTTL(ctx, userId, sessionId); err != nil {
+		return nil, gerror.Wrap(err, "failed to refresh secure session")
 	}
-
-	// Get current session key for the response
-	sessionKey, _ := ale.GetSessionKey(ctx, userId)
 
 	out = &model.TokenPair{
 		AccessToken:  accessToken,
@@ -409,10 +497,11 @@ func (s *sAuth) IsTokenBlacklisted(ctx context.Context, token string) bool {
 }
 
 // generateTokenPair generates an access token and refresh token for a user
-func generateTokenPair(ctx context.Context, userId string) (accessToken, refreshToken string, err error) {
+func generateTokenPair(ctx context.Context, userId, sessionId string) (accessToken, refreshToken string, err error) {
 	// Access Token (short-lived)
 	accessClaims := jwt.MapClaims{
 		"userId": userId,
+		"sid":    sessionId,
 		"type":   "access",
 		"exp":    time.Now().Add(getAccessTokenExpiry(ctx)).Unix(),
 	}
@@ -424,6 +513,7 @@ func generateTokenPair(ctx context.Context, userId string) (accessToken, refresh
 	// Refresh Token (long-lived)
 	refreshClaims := jwt.MapClaims{
 		"userId": userId,
+		"sid":    sessionId,
 		"type":   "refresh",
 		"exp":    time.Now().Add(getRefreshTokenExpiry(ctx)).Unix(),
 	}
@@ -437,7 +527,7 @@ func generateTokenPair(ctx context.Context, userId string) (accessToken, refresh
 
 func verifyTurnstile(ctx context.Context, token string) bool {
 	// Skip verification in development mode
-	if os.Getenv("ENV") == "development" {
+	if !isProductionEnvironment() && os.Getenv("ENV") == "development" {
 		return true
 	}
 
@@ -448,8 +538,8 @@ func verifyTurnstile(ctx context.Context, token string) bool {
 	}
 
 	if secret == "" {
-		g.Log().Warning(ctx, "Turnstile secret not configured (env or config), skipping verification")
-		return true
+		g.Log().Error(ctx, "Turnstile secret not configured")
+		return false
 	}
 
 	// Call Cloudflare Turnstile API
@@ -472,8 +562,32 @@ func verifyTurnstile(ctx context.Context, token string) bool {
 	return success
 }
 
+func isProductionEnvironment() bool {
+	env := strings.ToLower(strings.TrimSpace(os.Getenv("GF_ENV")))
+	if env == "" {
+		env = strings.ToLower(strings.TrimSpace(os.Getenv("ENV")))
+	}
+	return env == "production" || env == "prod"
+}
+
+func isRegistrationEmailAllowed(email string) bool {
+	raw := strings.TrimSpace(os.Getenv("BETA_ALLOWED_EMAILS"))
+	if raw == "" {
+		return !isProductionEnvironment()
+	}
+	for _, candidate := range strings.Split(raw, ",") {
+		if strings.EqualFold(strings.TrimSpace(candidate), email) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *sAuth) UpdatePassword(ctx context.Context, password, newPassword, confirmPassword string) error {
 	userId := utils.RequireUserId(ctx)
+	if err := rejectDemoSecurityChange(ctx, userId); err != nil {
+		return err
+	}
 
 	if newPassword == "" {
 		return gerror.New("new password is required")
@@ -507,8 +621,8 @@ func (s *sAuth) UpdatePassword(ctx context.Context, password, newPassword, confi
 			return gerror.New("current password is required")
 		}
 
-		hashedNewPassword := sha256.Sum256([]byte(newPassword))
-		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(hex.EncodeToString(hashedNewPassword[:])), bcrypt.DefaultCost)
+		// newPassword is expected to be a SHA-256 hex string from frontend
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 		if err != nil {
 			return gerror.Wrap(err, "failed to hash password")
 		}
@@ -525,4 +639,44 @@ func (s *sAuth) UpdatePassword(ctx context.Context, password, newPassword, confi
 
 		return nil
 	})
+}
+
+func rejectDemoSecurityChange(ctx context.Context, userID string) error {
+	config, err := demo_data.LoadConfig(ctx)
+	if err != nil {
+		return err
+	}
+	if !config.OnlineDemoEnabled {
+		return nil
+	}
+	columns := dao.Users.Columns()
+	count, err := dao.Users.Ctx(ctx).
+		Where(columns.Id, userID).
+		Where(columns.Email, config.UserEmail).
+		WhereNull(columns.DeletedAt).
+		Count()
+	if err != nil {
+		return gerror.Wrap(err, "failed to verify demo user")
+	}
+	if count > 0 {
+		return gerror.New("demo user security settings cannot be changed")
+	}
+	return nil
+}
+
+// GetCurrencyList returns a list of all supported currencies
+func (s *sAuth) GetCurrencyList(ctx context.Context) ([]string, error) {
+	var currencies []*entity.Currencies
+	err := dao.Currencies.Ctx(ctx).WhereNull("deleted_at").Scan(&currencies)
+	if err != nil {
+		return nil, gerror.Wrap(err, "failed to get currency list")
+	}
+
+	var codes []string
+	for _, c := range currencies {
+		if c != nil {
+			codes = append(codes, c.Code)
+		}
+	}
+	return codes, nil
 }

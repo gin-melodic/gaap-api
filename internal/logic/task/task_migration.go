@@ -9,6 +9,7 @@ import (
 	"gaap-api/internal/dao"
 	"gaap-api/internal/logic/dashboard"
 	"gaap-api/internal/logic/utils"
+	"gaap-api/internal/middleware"
 	"gaap-api/internal/model"
 	"gaap-api/internal/model/entity"
 	"gaap-api/internal/service"
@@ -37,12 +38,17 @@ func (s *sTask) processAccountMigration(ctx context.Context, payload json.RawMes
 	migrationPayload := data.Payload
 
 	// Update task status to running
-	_, err = dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, taskId).Data(entity.Tasks{
-		Status:    model.TaskStatusRunning,
-		StartedAt: gtime.Now(),
+	_, err = dao.Tasks.Ctx(ctx).Where(dao.Tasks.Columns().Id, taskId).Data(g.Map{
+		dao.Tasks.Columns().Status:    model.TaskStatusRunning,
+		dao.Tasks.Columns().StartedAt: gtime.Now(),
 	}).Update()
 	if err != nil {
 		return gerror.Wrap(err, "failed to update task status")
+	}
+
+	// Add userId to context for GetTask
+	if migrationPayload.Payload != nil {
+		ctx = context.WithValue(ctx, middleware.UserIdKey, migrationPayload.Payload.UserId.String())
 	}
 
 	// Check if task was cancelled
@@ -200,7 +206,7 @@ func (s *sTask) migrateBalanceWithTransactions(ctx context.Context, tx gdb.TX, s
 	}
 
 	// Get or create equity account for this currency
-	equityAccountId, err := s.getOrCreateMigrationEquityAccountInTx(ctx, tx, source.CurrencyCode, userId)
+	equityAccountId, err := s.getOrCreateMigrationEquityAccountInTx(ctx, tx, source.CurrencyCode, userId, source.Id)
 	if err != nil {
 		return gerror.Wrap(err, "failed to get/create equity account")
 	}
@@ -290,23 +296,18 @@ func (s *sTask) migrateBalanceWithTransactions(ctx context.Context, tx gdb.TX, s
 		return gerror.Wrap(err, "failed to apply equity-to-target balance change")
 	}
 
-	g.Log().Infof(ctx, "Successfully migrated balance from %s to %s via equity account (units=%d, nanos=%d)",
-		source.Name, target.Name, units, nanos)
-
 	return nil
 }
 
 // getOrCreateMigrationEquityAccountInTx gets or creates a migration equity account within a transaction.
 // This is a dedicated equity account for balance migrations to maintain audit trail.
-func (s *sTask) getOrCreateMigrationEquityAccountInTx(ctx context.Context, tx gdb.TX, currency string, userId uuid.UUID) (uuid.UUID, error) {
-	equityAccountName := "Migration Equity - " + currency
-
+// It uses equity_account_id FK for efficient lookup and sets bidirectional linking.
+func (s *sTask) getOrCreateMigrationEquityAccountInTx(ctx context.Context, tx gdb.TX, currency string, userId uuid.UUID, sourceAccountId uuid.UUID) (uuid.UUID, error) {
+	// Look for existing equity account linked via equity_account_id
 	var existing entity.Accounts
 	err := tx.Model(dao.Accounts.Table()).
-		Where(dao.Accounts.Columns().UserId, userId).
+		Where(dao.Accounts.Columns().EquityAccountId, sourceAccountId).
 		Where(dao.Accounts.Columns().Type, utils.AccountTypeEquity).
-		Where(dao.Accounts.Columns().CurrencyCode, currency).
-		Where(dao.Accounts.Columns().Name, equityAccountName).
 		Where(dao.Accounts.Columns().DeletedAt + " IS NULL").
 		Scan(&existing)
 
@@ -327,16 +328,19 @@ func (s *sTask) getOrCreateMigrationEquityAccountInTx(ctx context.Context, tx gd
 		return uuid.Nil, gerror.Wrap(err, "failed to generate UUID")
 	}
 
+	equityAccountName := "Migration Equity - " + currency
+
 	equityAccount := entity.Accounts{
-		Id:           newId,
-		UserId:       userId,
-		Name:         equityAccountName,
-		Type:         utils.AccountTypeEquity,
-		IsGroup:      false,
-		BalanceUnits: 0,
-		BalanceNanos: 0,
-		CurrencyCode: currency,
-		Date:         gtime.Now(),
+		Id:              newId,
+		UserId:          userId,
+		Name:            equityAccountName,
+		Type:            utils.AccountTypeEquity,
+		IsGroup:         false,
+		BalanceUnits:    0,
+		BalanceNanos:    0,
+		CurrencyCode:    currency,
+		Date:            gtime.Now(),
+		EquityAccountId: sourceAccountId, // Link equity -> source
 	}
 
 	_, err = tx.Model(dao.Accounts.Table()).
@@ -349,6 +353,16 @@ func (s *sTask) getOrCreateMigrationEquityAccountInTx(ctx context.Context, tx gd
 	if err != nil {
 		g.Log().Errorf(ctx, "Failed to insert equity account: %v", err)
 		return uuid.Nil, gerror.Wrap(err, "failed to create equity account")
+	}
+
+	// Set bidirectional link: source -> equity
+	_, err = tx.Model(dao.Accounts.Table()).
+		Where(dao.Accounts.Columns().Id, sourceAccountId).
+		Data(g.Map{dao.Accounts.Columns().EquityAccountId: newId}).
+		Update()
+	if err != nil {
+		g.Log().Errorf(ctx, "Failed to link source account to equity account: %v", err)
+		return uuid.Nil, gerror.Wrap(err, "failed to link source account to equity account")
 	}
 
 	g.Log().Infof(ctx, "Created migration equity account: %s (id=%s)", equityAccountName, newId)

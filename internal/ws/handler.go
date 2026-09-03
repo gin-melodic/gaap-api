@@ -111,8 +111,7 @@ func handleConnection(userId string, conn *websocket.Conn) {
 				}
 				return
 			}
-			// Handle incoming messages (if any)
-			g.Log().Debugf(context.TODO(), "WebSocket: received message from %s: %s", userId, string(message))
+			_ = message
 		}
 	}()
 

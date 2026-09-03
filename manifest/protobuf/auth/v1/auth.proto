@@ -10,6 +10,9 @@ import "user/v1/user.proto";
 service AuthService {
   // User login
   rpc Login(LoginReq) returns (LoginRes);
+
+  // Passwordless login for the configured online demo user
+  rpc DemoLogin(DemoLoginReq) returns (LoginRes);
   
   // User registration
   rpc Register(RegisterReq) returns (RegisterRes);
@@ -31,6 +34,9 @@ service AuthService {
   
   // Update password
   rpc UpdatePassword(UpdatePasswordReq) returns (UpdatePasswordRes);
+  
+  // Get currency list
+  rpc GetCurrencyList(GetCurrencyListReq) returns (GetCurrencyListRes);
 }
 
 message UpdatePasswordReq {
@@ -62,11 +68,14 @@ message LoginRes {
   base.BaseResponse base = 255;
 }
 
+message DemoLoginReq {}
+
 message RegisterReq {
   string email = 1;
   string password = 2;
   string nickname = 3;
   string cf_turnstile_response = 4;
+  string main_currency = 5;
 }
 
 message RegisterRes {
@@ -117,5 +126,16 @@ message Disable2FAReq {
 }
 
 message Disable2FARes {
+  base.BaseResponse base = 255;
+}
+
+message CurrencyInfo {
+  string code = 1;
+}
+
+message GetCurrencyListReq {}
+
+message GetCurrencyListRes {
+  repeated CurrencyInfo currencies = 1;
   base.BaseResponse base = 255;
 }

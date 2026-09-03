@@ -21,6 +21,7 @@ func (c *ControllerV1) GfRegister(ctx context.Context, req *v1.GfRegisterReq) (r
 		Password:            req.GetPassword(),
 		Nickname:            req.GetNickname(),
 		CfTurnstileResponse: req.GetCfTurnstileResponse(),
+		MainCurrency:        req.GetMainCurrency(),
 	}
 
 	authResp, err := service.Auth().Register(ctx, input)

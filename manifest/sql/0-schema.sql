@@ -105,8 +105,9 @@ CREATE TABLE IF NOT EXISTS accounts (
     currency_code VARCHAR(10) NOT NULL,
     balance_units BIGINT NOT NULL DEFAULT 0,
     balance_nanos INTEGER NOT NULL DEFAULT 0,
-    balance_decimal NUMERIC(20, 9) GENERATED ALWAYS AS ( balance_units + (balance_nanos::NUMERIC / 1000000000) ) STORED,
+    balance_decimal NUMERIC(28, 9) GENERATED ALWAYS AS ( balance_units + (balance_nanos::NUMERIC / 1000000000) ) STORED,
     default_child_id UUID REFERENCES accounts(id) ON DELETE SET NULL,
+    equity_account_id UUID REFERENCES accounts(id) ON DELETE SET NULL,
     date DATE,
     number VARCHAR(50),
     remarks VARCHAR(500),
@@ -125,7 +126,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     currency_code VARCHAR(10) NOT NULL,
     balance_units BIGINT NOT NULL DEFAULT 0,
     balance_nanos INTEGER NOT NULL DEFAULT 0,
-    balance_decimal NUMERIC(20, 9) GENERATED ALWAYS AS ( balance_units + (balance_nanos::NUMERIC / 1000000000) ) STORED,
+    balance_decimal NUMERIC(28, 9) GENERATED ALWAYS AS ( balance_units + (balance_nanos::NUMERIC / 1000000000) ) STORED,
     note VARCHAR(500),
     type INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -165,6 +166,7 @@ CREATE TABLE IF NOT EXISTS migration_mappings (
 
 -- Indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_accounts_parent_id ON accounts(parent_id);
+CREATE INDEX IF NOT EXISTS idx_accounts_equity_account_id ON accounts(equity_account_id);
 CREATE INDEX IF NOT EXISTS idx_accounts_type ON accounts(type);
 CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
 CREATE INDEX IF NOT EXISTS idx_transactions_from_account ON transactions(from_account_id);
@@ -202,4 +204,3 @@ COMMENT ON TABLE migration_mappings IS 'Temporary storage for safe data migratio
 
 -- Resume Foreign Keys Check
 SET session_replication_role = DEFAULT;
-

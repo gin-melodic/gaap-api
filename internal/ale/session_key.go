@@ -4,13 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"gaap-api/internal/crypto"
 	"gaap-api/internal/redis"
-
-	"github.com/gogf/gf/v2/frame/g"
 )
 
 const (
@@ -50,9 +49,24 @@ func GetBootstrapKey() (string, error) {
 	return key, nil
 }
 
+func sessionStorageKey(userId, sessionId string) (string, error) {
+	if userId == "" || sessionId == "" {
+		return "", fmt.Errorf("user id and session id are required")
+	}
+	return SessionKeyPrefix + userId + ":" + sessionId, nil
+}
+
+func allowInMemoryFallback() bool {
+	env := strings.ToLower(strings.TrimSpace(os.Getenv("GF_ENV")))
+	if env == "" {
+		env = strings.ToLower(strings.TrimSpace(os.Getenv("ENV")))
+	}
+	return env != "production" && env != "prod"
+}
+
 // GenerateAndStoreSessionKey generates a new session key for a user and stores it in Redis
 // Returns the session key as hex string
-func GenerateAndStoreSessionKey(ctx context.Context, userId string) (string, error) {
+func GenerateAndStoreSessionKey(ctx context.Context, userId, sessionId string) (string, error) {
 	redisClient, _ := redis.GetRedisClient(ctx, redis.RedisTypeAle)
 	sessionKey, err := crypto.GenerateSessionKey()
 	if err != nil {
@@ -60,13 +74,17 @@ func GenerateAndStoreSessionKey(ctx context.Context, userId string) (string, err
 	}
 
 	if redisClient == nil {
-		// Fallback: store in memory (for development)
-		storeSessionKeyInMemory(userId, sessionKey)
-		g.Log().Debugf(ctx, "Stored session key in memory for user %s (Redis not available)", userId)
+		if !allowInMemoryFallback() {
+			return "", fmt.Errorf("ALE Redis is required in production")
+		}
+		storeSessionKeyInMemory(userId, sessionId, sessionKey)
 		return sessionKey, nil
 	}
 
-	key := SessionKeyPrefix + userId
+	key, err := sessionStorageKey(userId, sessionId)
+	if err != nil {
+		return "", err
+	}
 	ttlMs := int64(SessionKeyTTL.Milliseconds())
 
 	// Store session key with TTL
@@ -75,69 +93,76 @@ func GenerateAndStoreSessionKey(ctx context.Context, userId string) (string, err
 		return "", fmt.Errorf("failed to store session key in Redis: %w", err)
 	}
 
-	g.Log().Debugf(ctx, "Stored session key in Redis for user %s", userId)
 	return sessionKey, nil
 }
 
 // GetSessionKey retrieves the session key for a user from Redis
-func GetSessionKey(ctx context.Context, userId string) (string, error) {
+func GetSessionKey(ctx context.Context, userId, sessionId string) (string, error) {
 	redisClient, _ := redis.GetRedisClient(ctx, redis.RedisTypeAle)
 	if redisClient == nil {
-		// Fallback: get from memory
-		g.Log().Debugf(ctx, "GetSessionKey: Redis client is nil, using in-memory storage for user %s", userId)
-		return getSessionKeyFromMemory(userId)
+		if !allowInMemoryFallback() {
+			return "", fmt.Errorf("ALE Redis is required in production")
+		}
+		return getSessionKeyFromMemory(userId, sessionId)
 	}
 
-	key := SessionKeyPrefix + userId
-	g.Log().Debugf(ctx, "GetSessionKey: Using Redis for user %s, key=%s", userId, key)
+	key, err := sessionStorageKey(userId, sessionId)
+	if err != nil {
+		return "", err
+	}
 	result, err := redisClient.Do(ctx, "GET", key)
 	if err != nil {
-		g.Log().Warningf(ctx, "GetSessionKey: Redis GET failed for user %s: %v", userId, err)
 		return "", fmt.Errorf("failed to get session key from Redis: %w", err)
 	}
 
 	sessionKey := result.String()
 	if sessionKey == "" {
-		g.Log().Debugf(ctx, "GetSessionKey: Session key not found in Redis for user %s", userId)
-		return "", fmt.Errorf("session key not found for user %s", userId)
+		return "", fmt.Errorf("session key not found")
 	}
-
-	g.Log().Debugf(ctx, "GetSessionKey: Found session key in Redis for user %s (length=%d)", userId, len(sessionKey))
 	return sessionKey, nil
 }
 
 // InvalidateSessionKey removes the session key for a user (on logout)
-func InvalidateSessionKey(ctx context.Context, userId string) error {
+func InvalidateSessionKey(ctx context.Context, userId, sessionId string) error {
 	redisClient, _ := redis.GetRedisClient(ctx, redis.RedisTypeAle)
 	if redisClient == nil {
-		// Fallback: remove from memory
-		removeSessionKeyFromMemory(userId)
+		if !allowInMemoryFallback() {
+			return fmt.Errorf("ALE Redis is required in production")
+		}
+		removeSessionKeyFromMemory(userId, sessionId)
 		return nil
 	}
 
-	key := SessionKeyPrefix + userId
-	_, err := redisClient.Do(ctx, "DEL", key)
+	key, err := sessionStorageKey(userId, sessionId)
+	if err != nil {
+		return err
+	}
+	_, err = redisClient.Do(ctx, "DEL", key)
 	if err != nil {
 		return fmt.Errorf("failed to invalidate session key: %w", err)
 	}
 
-	g.Log().Debugf(ctx, "Invalidated session key for user %s", userId)
 	return nil
 }
 
 // RefreshSessionKeyTTL extends the TTL of a session key (called on token refresh)
-func RefreshSessionKeyTTL(ctx context.Context, userId string) error {
+func RefreshSessionKeyTTL(ctx context.Context, userId, sessionId string) error {
 	redisClient, _ := redis.GetRedisClient(ctx, redis.RedisTypeAle)
 	if redisClient == nil {
-		// Memory storage doesn't have TTL, skip
+		if !allowInMemoryFallback() {
+			return fmt.Errorf("ALE Redis is required in production")
+		}
 		return nil
 	}
 
-	key := SessionKeyPrefix + userId
+	key, err := sessionStorageKey(userId, sessionId)
+	if err != nil {
+		return err
+	}
 	ttlMs := int64(SessionKeyTTL.Milliseconds())
 
 	// Extend TTL
-	_, err := redisClient.Do(ctx, "PEXPIRE", key, ttlMs)
+	_, err = redisClient.Do(ctx, "PEXPIRE", key, ttlMs)
 	if err != nil {
 		return fmt.Errorf("failed to refresh session key TTL: %w", err)
 	}
@@ -145,24 +170,24 @@ func RefreshSessionKeyTTL(ctx context.Context, userId string) error {
 	return nil
 }
 
-func storeSessionKeyInMemory(userId, sessionKey string) {
+func storeSessionKeyInMemory(userId, sessionId, sessionKey string) {
 	sessionKeyStoreMu.Lock()
 	defer sessionKeyStoreMu.Unlock()
-	sessionKeyStore[userId] = sessionKey
+	sessionKeyStore[userId+":"+sessionId] = sessionKey
 }
 
-func getSessionKeyFromMemory(userId string) (string, error) {
+func getSessionKeyFromMemory(userId, sessionId string) (string, error) {
 	sessionKeyStoreMu.RLock()
 	defer sessionKeyStoreMu.RUnlock()
-	sessionKey, exists := sessionKeyStore[userId]
+	sessionKey, exists := sessionKeyStore[userId+":"+sessionId]
 	if !exists {
-		return "", fmt.Errorf("session key not found for user %s", userId)
+		return "", fmt.Errorf("session key not found")
 	}
 	return sessionKey, nil
 }
 
-func removeSessionKeyFromMemory(userId string) {
+func removeSessionKeyFromMemory(userId, sessionId string) {
 	sessionKeyStoreMu.Lock()
 	defer sessionKeyStoreMu.Unlock()
-	delete(sessionKeyStore, userId)
+	delete(sessionKeyStore, userId+":"+sessionId)
 }

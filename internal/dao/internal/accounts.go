@@ -21,44 +21,46 @@ type AccountsDao struct {
 
 // AccountsColumns defines and stores column names for the table accounts.
 type AccountsColumns struct {
-	Id             string //
-	UserId         string //
-	ParentId       string //
-	Name           string //
-	Type           string //
-	IsGroup        string //
-	CurrencyCode   string //
-	BalanceUnits   string //
-	BalanceNanos   string //
-	BalanceDecimal string //
-	DefaultChildId string //
-	Date           string //
-	Number         string //
-	Remarks        string //
-	CreatedAt      string //
-	UpdatedAt      string //
-	DeletedAt      string //
+	Id              string //
+	UserId          string //
+	ParentId        string //
+	Name            string //
+	Type            string //
+	IsGroup         string //
+	CurrencyCode    string //
+	BalanceUnits    string //
+	BalanceNanos    string //
+	BalanceDecimal  string //
+	DefaultChildId  string //
+	EquityAccountId string //
+	Date            string //
+	Number          string //
+	Remarks         string //
+	CreatedAt       string //
+	UpdatedAt       string //
+	DeletedAt       string //
 }
 
 // accountsColumns holds the columns for the table accounts.
 var accountsColumns = AccountsColumns{
-	Id:             "id",
-	UserId:         "user_id",
-	ParentId:       "parent_id",
-	Name:           "name",
-	Type:           "type",
-	IsGroup:        "is_group",
-	CurrencyCode:   "currency_code",
-	BalanceUnits:   "balance_units",
-	BalanceNanos:   "balance_nanos",
-	BalanceDecimal: "balance_decimal",
-	DefaultChildId: "default_child_id",
-	Date:           "date",
-	Number:         "number",
-	Remarks:        "remarks",
-	CreatedAt:      "created_at",
-	UpdatedAt:      "updated_at",
-	DeletedAt:      "deleted_at",
+	Id:              "id",
+	UserId:          "user_id",
+	ParentId:        "parent_id",
+	Name:            "name",
+	Type:            "type",
+	IsGroup:         "is_group",
+	CurrencyCode:    "currency_code",
+	BalanceUnits:    "balance_units",
+	BalanceNanos:    "balance_nanos",
+	BalanceDecimal:  "balance_decimal",
+	DefaultChildId:  "default_child_id",
+	EquityAccountId: "equity_account_id",
+	Date:            "date",
+	Number:          "number",
+	Remarks:         "remarks",
+	CreatedAt:       "created_at",
+	UpdatedAt:       "updated_at",
+	DeletedAt:       "deleted_at",
 }
 
 // NewAccountsDao creates and returns a new DAO object for table data access.

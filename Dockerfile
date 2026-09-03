@@ -31,7 +31,7 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-  cmd = "go build -gcflags='all=-N -l' -o ./tmp/main ."
+  cmd = "go build -gcflags=\"all=-N -l\" -o ./tmp/main ."
   bin = "tmp/main"
   include_ext = ["go", "yaml", "toml", "ini"]
   exclude_dir = ["tmp", "vendor", "testdata"]
@@ -78,7 +78,8 @@ COPY . .
 # Build optimized binary
 RUN --mount=type=cache,target=/go/pkg/mod \
   --mount=type=cache,target=/root/.cache/go-build \
-  CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o main .
+  CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o main . \
+  && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o reconcile ./cmd/reconcile
 
 # ==================== Production Runtime ====================
 FROM alpine:latest AS production
@@ -92,6 +93,7 @@ RUN addgroup -g 1001 -S gaap && \
   adduser -u 1001 -S gaap -G gaap
 
 COPY --from=builder --chown=gaap:gaap /app/main .
+COPY --from=builder --chown=gaap:gaap /app/reconcile .
 COPY --chown=gaap:gaap ./manifest ./manifest
 
 USER gaap

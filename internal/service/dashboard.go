@@ -20,8 +20,9 @@ type (
 		GetDashboardSummary(ctx context.Context) (out *model.DashboardSummary, err error)
 		// GetMonthlyStats returns the monthly income/expense from a Redis snapshot.
 		GetMonthlyStats(ctx context.Context) (out *model.MonthlyStats, err error)
-		// GetBalanceTrend returns daily balance snapshots from Redis.
-		GetBalanceTrend(ctx context.Context, accounts []uuid.UUID) (out []model.DailyBalance, err error)
+		// GetBalanceTrend returns inclusive daily balance snapshots for the requested
+		// range. Omitting both dates defaults to the past 60 calendar days.
+		GetBalanceTrend(ctx context.Context, accounts []uuid.UUID, startDateValue string, endDateValue string) (out []model.DailyBalance, err error)
 	}
 )
 

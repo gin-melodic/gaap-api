@@ -240,7 +240,10 @@ func FlushAllSnapshotsToDB(ctx context.Context) {
 	var users []struct {
 		Id string `orm:"id"`
 	}
-	err := g.DB().Model("users").Fields("id").Scan(&users)
+	err := dao.Users.Ctx(ctx).
+		Fields(dao.Users.Columns().Id).
+		WhereNull(dao.Users.Columns().DeletedAt).
+		Scan(&users)
 	if err != nil {
 		g.Log().Warningf(ctx, "Failed to query users for snapshot flush: %v", err)
 		return

@@ -5,6 +5,8 @@ import (
 
 	v1 "gaap-api/api/auth/v1"
 	"gaap-api/api/base"
+	"gaap-api/internal/ale"
+	"gaap-api/internal/middleware"
 	"gaap-api/internal/service"
 	utilproto "gaap-api/utility/proto"
 
@@ -21,6 +23,11 @@ func (c *ControllerV1) GfLogout(ctx context.Context, req *v1.GfLogoutReq) (res *
 	tokenString := ghttp.RequestFromCtx(ctx).GetHeader("Authorization")
 	if tokenString != "" {
 		service.Auth().AddTokenToBlacklist(ctx, tokenString)
+	}
+	userId, _ := ctx.Value(middleware.UserIdKey).(string)
+	sessionId, _ := ctx.Value(middleware.SessionIdKey).(string)
+	if err := ale.InvalidateSessionKey(ctx, userId, sessionId); err != nil {
+		return nil, err
 	}
 
 	return &v1.LogoutRes{

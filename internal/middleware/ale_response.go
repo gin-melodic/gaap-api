@@ -1,13 +1,12 @@
 package middleware
 
 import (
-	"encoding/json"
+	"fmt"
+	"strings"
 
 	"gaap-api/internal/ale"
 
-	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/net/ghttp"
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -19,7 +18,8 @@ func ALEResponseMiddleware(r *ghttp.Request) {
 
 	// Check if there was an exception/panic - handle first
 	if err := r.GetError(); err != nil {
-		handleErrorResponse(r, err.Error(), 500)
+		status, message := classifyHandlerError(err.Error())
+		writeProtoError(r, status, message, r.GetCtxVar("ale_key").String())
 		return
 	}
 
@@ -35,32 +35,27 @@ func ALEResponseMiddleware(r *ghttp.Request) {
 	hexKey := r.GetCtxVar("ale_key").String()
 
 	if aleEnabled.IsNil() || !aleEnabled.Bool() || hexKey == "" {
-		// ALE not enabled, return as regular JSON
-		writeJSONResponse(r, handlerRes)
+		writeProtoError(r, 500, "secure response unavailable", "")
 		return
 	}
-
-	ctx := r.Context()
 
 	// Serialize response to Protobuf binary
 	protoBytes, err := serializeToProtobuf(handlerRes)
 	if err != nil {
-		g.Log().Warningf(ctx, "Failed to serialize response to protobuf: %v", err)
-		// Fallback to JSON response
-		writeJSONResponse(r, handlerRes)
+		writeProtoError(r, 500, "invalid protobuf response", hexKey)
 		return
 	}
 
 	// Encrypt the protobuf data
 	encrypted, err := ale.EncryptResponse(protoBytes, hexKey)
 	if err != nil {
-		g.Log().Errorf(ctx, "Failed to encrypt ALE response: %v", err)
-		handleErrorResponse(r, "Encryption error", 500)
+		writeProtoError(r, 500, "response encryption failed", "")
 		return
 	}
 
 	// Write encrypted binary response
 	r.Response.Header().Set("Content-Type", "application/octet-stream")
+	r.Response.Header().Set(HeaderALEEncrypted, "1")
 	r.Response.ClearBuffer()
 	r.Response.Write(encrypted)
 }
@@ -74,45 +69,27 @@ func serializeToProtobuf(res interface{}) ([]byte, error) {
 		return proto.Marshal(protoMsg)
 	}
 
-	// Fallback: serialize to JSON bytes first
-	// This works because protojson can handle the conversion
-	jsonBytes, err := json.Marshal(res)
-	if err != nil {
-		return nil, err
-	}
-
-	// For non-proto types, we need to return the JSON as-is
-	// The frontend will need to handle this case
-	// Actually, all our responses ARE proto.Message types,
-	// so this path shouldn't be hit in practice.
-	return jsonBytes, nil
+	return nil, fmt.Errorf("response type %T is not a protobuf message", res)
 }
 
-// writeJSONResponse writes a JSON response (for non-ALE requests)
-func writeJSONResponse(r *ghttp.Request, res interface{}) {
-	// If it's a proto message, use protojson for consistent field names
-	if protoMsg, ok := res.(proto.Message); ok {
-		jsonBytes, err := protojson.Marshal(protoMsg)
-		if err == nil {
-			r.Response.Header().Set("Content-Type", "application/json")
-			r.Response.ClearBuffer()
-			r.Response.Write(jsonBytes)
-			return
-		}
+func classifyHandlerError(raw string) (int, string) {
+	message := strings.TrimSpace(raw)
+	lower := strings.ToLower(message)
+	switch {
+	case strings.Contains(lower, "invalid email or password"):
+		return 401, message
+	case strings.Contains(lower, "registration unavailable"):
+		return 403, message
+	case strings.Contains(lower, "not found"):
+		return 404, message
+	case strings.Contains(lower, "unauthorized"), strings.Contains(lower, "token"), strings.Contains(lower, "session expired"):
+		return 401, message
+	case strings.Contains(lower, "required"), strings.Contains(lower, "invalid"), strings.Contains(lower, "cannot"),
+		strings.Contains(lower, "mismatch"), strings.Contains(lower, "unknown"), strings.Contains(lower, "amount"),
+		strings.Contains(lower, "currency"), strings.Contains(lower, "account"), strings.Contains(lower, "email"),
+		strings.Contains(lower, "password"):
+		return 400, message
+	default:
+		return 500, "internal server error"
 	}
-
-	// Fallback to standard JSON
-	r.Response.Header().Set("Content-Type", "application/json")
-	r.Response.ClearBuffer()
-	r.Response.WriteJson(res)
-}
-
-// handleErrorResponse writes an error response
-func handleErrorResponse(r *ghttp.Request, message string, code int) {
-	r.Response.Header().Set("Content-Type", "application/json")
-	r.Response.ClearBuffer()
-	r.Response.WriteJson(g.Map{
-		"code":    code,
-		"message": message,
-	})
 }

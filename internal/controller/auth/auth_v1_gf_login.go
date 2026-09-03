@@ -17,9 +17,10 @@ func (c *ControllerV1) GfLogin(ctx context.Context, req *v1.GfLoginReq) (res *v1
 	}
 
 	input := model.LoginInput{
-		Email:    req.GetEmail(),
-		Password: req.GetPassword(),
-		Code:     req.GetCode(),
+		Email:               req.GetEmail(),
+		Password:            req.GetPassword(),
+		Code:                req.GetCode(),
+		CfTurnstileResponse: req.GetCfTurnstileResponse(),
 	}
 
 	authResp, err := service.Auth().Login(ctx, input)

@@ -7,11 +7,12 @@ package auth
 import (
 	"context"
 
-	v1 "gaap-api/api/auth/v1"
+	"gaap-api/api/auth/v1"
 )
 
 type IAuthV1 interface {
 	GfLogin(ctx context.Context, req *v1.GfLoginReq) (res *v1.GfLoginRes, err error)
+	GfDemoLogin(ctx context.Context, req *v1.GfDemoLoginReq) (res *v1.GfDemoLoginRes, err error)
 	GfRegister(ctx context.Context, req *v1.GfRegisterReq) (res *v1.GfRegisterRes, err error)
 	GfLogout(ctx context.Context, req *v1.GfLogoutReq) (res *v1.GfLogoutRes, err error)
 	GfRefreshToken(ctx context.Context, req *v1.GfRefreshTokenReq) (res *v1.GfRefreshTokenRes, err error)
@@ -19,4 +20,5 @@ type IAuthV1 interface {
 	GfEnable2FA(ctx context.Context, req *v1.GfEnable2FAReq) (res *v1.GfEnable2FARes, err error)
 	GfDisable2FA(ctx context.Context, req *v1.GfDisable2FAReq) (res *v1.GfDisable2FARes, err error)
 	GfUpdatePassword(ctx context.Context, req *v1.GfUpdatePasswordReq) (res *v1.GfUpdatePasswordRes, err error)
+	GfGetCurrencyList(ctx context.Context, req *v1.GfGetCurrencyListReq) (res *v1.GfGetCurrencyListRes, err error)
 }

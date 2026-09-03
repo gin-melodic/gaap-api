@@ -51,6 +51,10 @@ message GetMonthlyStatsRes {
 
 message GetBalanceTrendReq {
   repeated string accounts = 1;
+  // Inclusive start date in YYYY-MM-DD format. Defaults with end_date to the past 60 days.
+  string start_date = 2;
+  // Inclusive end date in YYYY-MM-DD format. Defaults with start_date to today.
+  string end_date = 3;
 }
 
 message GetBalanceTrendRes {
