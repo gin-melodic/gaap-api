@@ -2,6 +2,9 @@ package transaction
 
 import (
 	"context"
+	"regexp"
+	"time"
+
 	"gaap-api/internal/dao"
 	"gaap-api/internal/logic/dashboard"
 	"gaap-api/internal/logic/utils"
@@ -26,6 +29,23 @@ func New() *sTransaction {
 	return &sTransaction{}
 }
 
+var plainDateOnly = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+
+// endDateFilter renders the end-date predicate for transaction lists. A plain
+// calendar date means "through the end of that day", so it becomes an exclusive
+// next-midnight boundary; values carrying a time-of-day keep inclusive <= semantics.
+func endDateFilter(endDate string) (string, string) {
+	if !plainDateOnly.MatchString(endDate) {
+		return "<=", endDate
+	}
+	parsed, parseErr := time.ParseInLocation("2006-01-02", endDate, time.UTC)
+	if parseErr != nil {
+		return "<=", endDate
+	}
+	nextDay := parsed.AddDate(0, 0, 1).Format("2006-01-02")
+	return " < ", nextDay + " 00:00:00"
+}
+
 func (s *sTransaction) ListTransactions(ctx context.Context, in model.TransactionQueryInput) (out []entity.Transactions, total int, err error) {
 	// Get userId from context for security filtering
 	userId := utils.RequireUserId(ctx)
@@ -38,7 +58,8 @@ func (s *sTransaction) ListTransactions(ctx context.Context, in model.Transactio
 		m = m.Where(dao.Transactions.Columns().Date+" >=", in.StartDate)
 	}
 	if in.EndDate != "" {
-		m = m.Where(dao.Transactions.Columns().Date+" <=", in.EndDate)
+		endOp, endValue := endDateFilter(in.EndDate)
+		m = m.Where(dao.Transactions.Columns().Date+endOp, endValue)
 	}
 	if in.AccountId != uuid.Nil {
 		m = m.Where(dao.Transactions.Columns().FromAccountId+" = ? OR "+dao.Transactions.Columns().ToAccountId+" = ?", in.AccountId, in.AccountId)

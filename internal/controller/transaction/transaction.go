@@ -7,6 +7,8 @@ package transaction
 import (
 	"context"
 
+	"time"
+
 	"gaap-api/api/base"
 	v1 "gaap-api/api/transaction/v1"
 	"gaap-api/internal/middleware"
@@ -36,12 +38,25 @@ func requireUserIdFromContext(ctx context.Context) uuid.UUID {
 	return parsedId
 }
 
-// gtimeToDateString safely converts *gtime.Time to date string (YYYY-MM-DD)
-func gtimeToDateString(t *gtime.Time) string {
+// transactionResponseZone is the canonical wall-clock zone for transaction
+// date responses. Entities round-trip through Postgres and come back in UTC,
+// so rendering without normalization would emit a Z suffix (2026-09-01T00:00:00Z)
+// whose YYYY-MM-DD prefix shifts for consumers of the string form; normalizing
+// to Asia/Shanghai keeps responses as unambiguous RFC3339 with an explicit
+// offset and a stable local date prefix (e.g. 2026-08-14T15:30:05+08:00).
+var transactionResponseZone = time.FixedZone("CST", 8*60*60)
+
+// gtimeToTimestampString safely converts *gtime.Time to an RFC3339 timestamp
+// string (e.g. 2026-08-14T15:30:05+08:00). Transactions keep full date/time
+// semantics end-to-end: the database column is timestamptz and clients send a
+// wall-clock value down to seconds, so responses must not truncate it to a
+// bare date (the previous Y-m-d output made lists/edit forms show 08:00 in
+// UTC+8 and silently lost entered hours/minutes/seconds on re-save).
+func gtimeToTimestampString(t *gtime.Time) string {
 	if t == nil {
 		return ""
 	}
-	return t.Format("Y-m-d")
+	return t.Time.In(transactionResponseZone).Format(time.RFC3339)
 }
 
 // entityToProto converts entity.Transactions to protobuf v1.Transaction
@@ -52,7 +67,7 @@ func entityToProto(e *entity.Transactions) *v1.Transaction {
 
 	tx := &v1.Transaction{
 		Id:   e.Id.String(),
-		Date: gtimeToDateString(e.Date),
+		Date: gtimeToTimestampString(e.Date),
 		From: e.FromAccountId.String(),
 		To:   e.ToAccountId.String(),
 		Note: e.Note,
