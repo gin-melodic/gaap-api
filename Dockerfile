@@ -16,7 +16,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
   musl-dev \
   git \
   && go install github.com/air-verse/air@v1.61.7 \
-  && go install github.com/go-delve/delve/cmd/dlv@latest
+  && go install github.com/go-delve/delve/cmd/dlv@v1.23.1
 
 # Copy Go module files for dependency caching
 COPY go.mod go.sum ./
