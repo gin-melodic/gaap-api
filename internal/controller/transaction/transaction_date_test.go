@@ -75,6 +75,13 @@ func TestGtimeToTimestampStringNilBoundary(t *testing.T) {
 // gtime.NewFromStr; the parsed value must round-trip through the serializer
 // without losing any sub-day component.
 func TestClientDateTimePayloadRoundTrip(t *testing.T) {
+	// gtime.NewFromStr parses naive wall-clock strings in time.Local; production
+	// runs with TZ=Asia/Shanghai, so pin the test to the canonical +08 zone to
+	// stay independent of the CI runner's timezone.
+	origLocal := time.Local
+	time.Local = cstZone
+	t.Cleanup(func() { time.Local = origLocal })
+
 	payloads := []struct {
 		name    string
 		payload string
