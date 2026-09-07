@@ -514,12 +514,16 @@ func calculateBalanceTrend(
 	endOfDay := time.Date(endDate.Year(), endDate.Month(), endDate.Day(), 23, 59, 59, 999999999, endDate.Location())
 
 	// Create a map of Date -> Transactions
+	// Transactions are stored as instants (Postgres returns UTC), but the walk
+	// buckets by server-local calendar dates. Convert to the walk's zone so a
+	// transaction dated "2026-08-09" in +08 (instant 2026-08-08T16:00Z) is
+	// attributed to 2026-08-09, not the previous UTC day.
 	transactionsByDate := make(map[string][]entity.Transactions)
 	for _, t := range transactions {
 		if t.Date == nil {
 			continue
 		}
-		dateStr := t.Date.Layout("2006-01-02")
+		dateStr := t.Date.In(endDate.Location()).Format("2006-01-02")
 		transactionsByDate[dateStr] = append(transactionsByDate[dateStr], t)
 	}
 

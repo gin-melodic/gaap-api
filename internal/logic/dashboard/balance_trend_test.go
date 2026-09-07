@@ -14,7 +14,8 @@ import (
 )
 
 func TestCalculateBalanceTrendHistoricalCreateUpdateDelete(t *testing.T) {
-	now := time.Date(2026, time.August, 13, 12, 0, 0, 0, time.UTC)
+	location := time.FixedZone("UTC+8", 8*60*60)
+	now := time.Date(2026, time.August, 13, 12, 0, 0, 0, location)
 	assetID := uuid.New()
 	expenseID := uuid.New()
 	userID := uuid.New()
@@ -49,6 +50,27 @@ func TestCalculateBalanceTrendHistoricalCreateUpdateDelete(t *testing.T) {
 		assertDailyAccountBalance(t, trend, "2026-08-10", assetID, 0, 0)
 		assertDailyAccountBalance(t, trend, "2026-08-13", assetID, 0, 0)
 	})
+}
+
+func TestCalculateBalanceTrendDBScannedTransactionUsesLocalCalendarDate(t *testing.T) {
+	cn := time.FixedZone("UTC+8", 8*60*60)
+	now := time.Date(2026, 9, 4, 12, 0, 0, 0, cn)
+	assetID := uuid.New()
+	expenseID := uuid.New()
+	userID := uuid.New()
+
+	// The API stores a transaction dated "2026-08-09" (+08) at the instant
+	// 2026-08-08T16:00Z, and Postgres scans it back with UTC location.
+	dbScanned := historicalExpense(userID, assetID, expenseID, "2026-08-09")
+	dbScanned.Date = gtime.NewFromTime(time.Date(2026, 8, 8, 16, 0, 0, 0, time.UTC))
+
+	trend := calculateBalanceTrend(now.AddDate(0, 0, -29), now, map[uuid.UUID]accountBalance{
+		assetID: {Id: assetID, BalanceUnits: -10, CurrencyCode: "CNY"},
+	}, []entity.Transactions{dbScanned})
+
+	assertDailyAccountBalance(t, trend, "2026-08-08", assetID, 0, 0)
+	assertDailyAccountBalance(t, trend, "2026-08-09", assetID, -10, 0)
+	assertDailyAccountBalance(t, trend, "2026-08-13", assetID, -10, 0)
 }
 
 func TestResolveTrendDateRange(t *testing.T) {
@@ -152,8 +174,9 @@ func TestEarliestTrendAccountDate(t *testing.T) {
 }
 
 func TestCalculateBalanceTrendIncludesRangeBoundariesAndLargeTransactionSet(t *testing.T) {
-	startDate := time.Date(2026, time.August, 1, 0, 0, 0, 0, time.UTC)
-	endDate := time.Date(2026, time.August, 2, 0, 0, 0, 0, time.UTC)
+	location := time.FixedZone("UTC+8", 8*60*60)
+	startDate := time.Date(2026, time.August, 1, 0, 0, 0, 0, location)
+	endDate := time.Date(2026, time.August, 2, 0, 0, 0, 0, location)
 	assetID := uuid.New()
 	expenseID := uuid.New()
 	userID := uuid.New()
