@@ -16,7 +16,10 @@ func TestDeferredBetaPaths(t *testing.T) {
 		"/v1/dashboard/get-dashboard-summary": false,
 		"/v1/task/list-tasks":                 true,
 		"/v1/data/export-data":                true,
-		"/v1/user/update-profile":             true,
+		// DEF-029: update-profile carries the base-currency switch and must work in the beta
+		// runtime; only the deferred theme preference update stays 404.
+		"/v1/user/update-profile": false,
+		"/v1/user/update-theme":   true,
 	}
 
 	for path, expected := range tests {
