@@ -2,7 +2,18 @@ server:
   address: ':8000'
   openapiPath: ''
   swaggerPath: ''
+  # Persistent in-container log adapter (DEF-032): gf ghttp writes one line per
+  # request to /app/logs/access-{Ymd}.log AND stdout regardless of logger level,
+  # so docker logs never goes silent while traffic flows. The container mounts a
+  # writable volume at /app/logs (docker-compose.uat.yml) because it runs read_only.
+  logPath: '/app/logs'
+  accessLogEnabled: true
+  accessLogPattern: 'access-{Ymd}.log'
 
 logger:
   level: 'warning'
   stdout: true
+  # App-level g.Log() output (warnings and above) also lands in a day-findable
+  # file next to the access log, instead of being lost when the container restarts.
+  path: '/app/logs'
+  file: '{Y}{m}{d}-api.log'

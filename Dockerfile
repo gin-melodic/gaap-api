@@ -92,6 +92,11 @@ WORKDIR /app
 RUN addgroup -g 1001 -S gaap && \
   adduser -u 1001 -S gaap -G gaap
 
+# Writable log directory (DEF-032): seeded into the api_logs volume on first run.
+# The container is read_only, so /app/logs must come from this image for the
+# named-volume copy-up to carry gaap ownership and be writable by the app user.
+RUN mkdir -p /app/logs && chown gaap:gaap /app/logs
+
 COPY --from=builder --chown=gaap:gaap /app/main .
 COPY --from=builder --chown=gaap:gaap /app/reconcile .
 COPY --chown=gaap:gaap ./manifest ./manifest
