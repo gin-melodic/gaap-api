@@ -16,4 +16,6 @@ type IConfigV1 interface {
 	GfDeleteCurrency(ctx context.Context, req *v1.GfDeleteCurrencyReq) (res *v1.GfDeleteCurrencyRes, err error)
 	GfGetThemes(ctx context.Context, req *v1.GfGetThemesReq) (res *v1.GfGetThemesRes, err error)
 	GfGetAccountTypes(ctx context.Context, req *v1.GfGetAccountTypesReq) (res *v1.GfGetAccountTypesRes, err error)
+	GfGetExchangeRates(ctx context.Context, req *v1.GfGetExchangeRatesReq) (res *v1.GfGetExchangeRatesRes, err error)
+	GfSetExchangeRate(ctx context.Context, req *v1.GfSetExchangeRateReq) (res *v1.GfSetExchangeRateRes, err error)
 }

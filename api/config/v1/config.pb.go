@@ -487,6 +487,276 @@ func (x *GetAccountTypesRes) GetBase() *base.BaseResponse {
 	return nil
 }
 
+// ExchangeRate is a single anchor-relative exchange rate. The rate is serialized
+// as a decimal string to preserve precision (never a float).
+type ExchangeRate struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Currency      string                 `protobuf:"bytes,1,opt,name=currency,proto3" json:"currency,omitempty"`
+	Rate          string                 `protobuf:"bytes,2,opt,name=rate,proto3" json:"rate,omitempty"`
+	Source        string                 `protobuf:"bytes,3,opt,name=source,proto3" json:"source,omitempty"`
+	UpdatedAt     string                 `protobuf:"bytes,4,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExchangeRate) Reset() {
+	*x = ExchangeRate{}
+	mi := &file_config_v1_config_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExchangeRate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExchangeRate) ProtoMessage() {}
+
+func (x *ExchangeRate) ProtoReflect() protoreflect.Message {
+	mi := &file_config_v1_config_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExchangeRate.ProtoReflect.Descriptor instead.
+func (*ExchangeRate) Descriptor() ([]byte, []int) {
+	return file_config_v1_config_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ExchangeRate) GetCurrency() string {
+	if x != nil {
+		return x.Currency
+	}
+	return ""
+}
+
+func (x *ExchangeRate) GetRate() string {
+	if x != nil {
+		return x.Rate
+	}
+	return ""
+}
+
+func (x *ExchangeRate) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *ExchangeRate) GetUpdatedAt() string {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return ""
+}
+
+type GetExchangeRatesReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetExchangeRatesReq) Reset() {
+	*x = GetExchangeRatesReq{}
+	mi := &file_config_v1_config_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetExchangeRatesReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetExchangeRatesReq) ProtoMessage() {}
+
+func (x *GetExchangeRatesReq) ProtoReflect() protoreflect.Message {
+	mi := &file_config_v1_config_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetExchangeRatesReq.ProtoReflect.Descriptor instead.
+func (*GetExchangeRatesReq) Descriptor() ([]byte, []int) {
+	return file_config_v1_config_proto_rawDescGZIP(), []int{11}
+}
+
+type GetExchangeRatesRes struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Anchor        string                 `protobuf:"bytes,1,opt,name=anchor,proto3" json:"anchor,omitempty"`
+	Rates         []*ExchangeRate        `protobuf:"bytes,2,rep,name=rates,proto3" json:"rates,omitempty"`
+	Base          *base.BaseResponse     `protobuf:"bytes,255,opt,name=base,proto3" json:"base,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetExchangeRatesRes) Reset() {
+	*x = GetExchangeRatesRes{}
+	mi := &file_config_v1_config_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetExchangeRatesRes) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetExchangeRatesRes) ProtoMessage() {}
+
+func (x *GetExchangeRatesRes) ProtoReflect() protoreflect.Message {
+	mi := &file_config_v1_config_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetExchangeRatesRes.ProtoReflect.Descriptor instead.
+func (*GetExchangeRatesRes) Descriptor() ([]byte, []int) {
+	return file_config_v1_config_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *GetExchangeRatesRes) GetAnchor() string {
+	if x != nil {
+		return x.Anchor
+	}
+	return ""
+}
+
+func (x *GetExchangeRatesRes) GetRates() []*ExchangeRate {
+	if x != nil {
+		return x.Rates
+	}
+	return nil
+}
+
+func (x *GetExchangeRatesRes) GetBase() *base.BaseResponse {
+	if x != nil {
+		return x.Base
+	}
+	return nil
+}
+
+type SetExchangeRateReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Currency      string                 `protobuf:"bytes,1,opt,name=currency,proto3" json:"currency,omitempty"`
+	Rate          string                 `protobuf:"bytes,2,opt,name=rate,proto3" json:"rate,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetExchangeRateReq) Reset() {
+	*x = SetExchangeRateReq{}
+	mi := &file_config_v1_config_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetExchangeRateReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetExchangeRateReq) ProtoMessage() {}
+
+func (x *SetExchangeRateReq) ProtoReflect() protoreflect.Message {
+	mi := &file_config_v1_config_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetExchangeRateReq.ProtoReflect.Descriptor instead.
+func (*SetExchangeRateReq) Descriptor() ([]byte, []int) {
+	return file_config_v1_config_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *SetExchangeRateReq) GetCurrency() string {
+	if x != nil {
+		return x.Currency
+	}
+	return ""
+}
+
+func (x *SetExchangeRateReq) GetRate() string {
+	if x != nil {
+		return x.Rate
+	}
+	return ""
+}
+
+type SetExchangeRateRes struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Rate          *ExchangeRate          `protobuf:"bytes,1,opt,name=rate,proto3" json:"rate,omitempty"`
+	Base          *base.BaseResponse     `protobuf:"bytes,255,opt,name=base,proto3" json:"base,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetExchangeRateRes) Reset() {
+	*x = SetExchangeRateRes{}
+	mi := &file_config_v1_config_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetExchangeRateRes) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetExchangeRateRes) ProtoMessage() {}
+
+func (x *SetExchangeRateRes) ProtoReflect() protoreflect.Message {
+	mi := &file_config_v1_config_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetExchangeRateRes.ProtoReflect.Descriptor instead.
+func (*SetExchangeRateRes) Descriptor() ([]byte, []int) {
+	return file_config_v1_config_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *SetExchangeRateRes) GetRate() *ExchangeRate {
+	if x != nil {
+		return x.Rate
+	}
+	return nil
+}
+
+func (x *SetExchangeRateRes) GetBase() *base.BaseResponse {
+	if x != nil {
+		return x.Base
+	}
+	return nil
+}
+
 var File_config_v1_config_proto protoreflect.FileDescriptor
 
 const file_config_v1_config_proto_rawDesc = "" +
@@ -522,13 +792,32 @@ const file_config_v1_config_proto_rawDesc = "" +
 	"\n" +
 	"TypesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x05R\x03key\x12-\n" +
-	"\x05value\x18\x02 \x01(\v2\x17.base.AccountTypeConfigR\x05value:\x028\x012\x80\x03\n" +
+	"\x05value\x18\x02 \x01(\v2\x17.base.AccountTypeConfigR\x05value:\x028\x01\"u\n" +
+	"\fExchangeRate\x12\x1a\n" +
+	"\bcurrency\x18\x01 \x01(\tR\bcurrency\x12\x12\n" +
+	"\x04rate\x18\x02 \x01(\tR\x04rate\x12\x16\n" +
+	"\x06source\x18\x03 \x01(\tR\x06source\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\x04 \x01(\tR\tupdatedAt\"\x15\n" +
+	"\x13GetExchangeRatesReq\"\x85\x01\n" +
+	"\x13GetExchangeRatesRes\x12\x16\n" +
+	"\x06anchor\x18\x01 \x01(\tR\x06anchor\x12-\n" +
+	"\x05rates\x18\x02 \x03(\v2\x17.config.v1.ExchangeRateR\x05rates\x12'\n" +
+	"\x04base\x18\xff\x01 \x01(\v2\x12.base.BaseResponseR\x04base\"D\n" +
+	"\x12SetExchangeRateReq\x12\x1a\n" +
+	"\bcurrency\x18\x01 \x01(\tR\bcurrency\x12\x12\n" +
+	"\x04rate\x18\x02 \x01(\tR\x04rate\"j\n" +
+	"\x12SetExchangeRateRes\x12+\n" +
+	"\x04rate\x18\x01 \x01(\v2\x17.config.v1.ExchangeRateR\x04rate\x12'\n" +
+	"\x04base\x18\xff\x01 \x01(\v2\x12.base.BaseResponseR\x04base2\xa5\x04\n" +
 	"\rConfigService\x12L\n" +
 	"\x0eListCurrencies\x12\x1c.config.v1.ListCurrenciesReq\x1a\x1c.config.v1.ListCurrenciesRes\x12C\n" +
 	"\vAddCurrency\x12\x19.config.v1.AddCurrencyReq\x1a\x19.config.v1.AddCurrencyRes\x12L\n" +
 	"\x0eDeleteCurrency\x12\x1c.config.v1.DeleteCurrencyReq\x1a\x1c.config.v1.DeleteCurrencyRes\x12=\n" +
 	"\tGetThemes\x12\x17.config.v1.GetThemesReq\x1a\x17.config.v1.GetThemesRes\x12O\n" +
-	"\x0fGetAccountTypes\x12\x1d.config.v1.GetAccountTypesReq\x1a\x1d.config.v1.GetAccountTypesResB\x1bZ\x19gaap-api/api/config/v1;v1b\x06proto3"
+	"\x0fGetAccountTypes\x12\x1d.config.v1.GetAccountTypesReq\x1a\x1d.config.v1.GetAccountTypesRes\x12R\n" +
+	"\x10GetExchangeRates\x12\x1e.config.v1.GetExchangeRatesReq\x1a\x1e.config.v1.GetExchangeRatesRes\x12O\n" +
+	"\x0fSetExchangeRate\x12\x1d.config.v1.SetExchangeRateReq\x1a\x1d.config.v1.SetExchangeRateResB\x1bZ\x19gaap-api/api/config/v1;v1b\x06proto3"
 
 var (
 	file_config_v1_config_proto_rawDescOnce sync.Once
@@ -542,7 +831,7 @@ func file_config_v1_config_proto_rawDescGZIP() []byte {
 	return file_config_v1_config_proto_rawDescData
 }
 
-var file_config_v1_config_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_config_v1_config_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_config_v1_config_proto_goTypes = []any{
 	(*ListCurrenciesReq)(nil),      // 0: config.v1.ListCurrenciesReq
 	(*ListCurrenciesRes)(nil),      // 1: config.v1.ListCurrenciesRes
@@ -554,35 +843,48 @@ var file_config_v1_config_proto_goTypes = []any{
 	(*GetThemesRes)(nil),           // 7: config.v1.GetThemesRes
 	(*GetAccountTypesReq)(nil),     // 8: config.v1.GetAccountTypesReq
 	(*GetAccountTypesRes)(nil),     // 9: config.v1.GetAccountTypesRes
-	nil,                            // 10: config.v1.GetAccountTypesRes.TypesEntry
-	(*base.BaseResponse)(nil),      // 11: base.BaseResponse
-	(*base.Theme)(nil),             // 12: base.Theme
-	(*base.AccountTypeConfig)(nil), // 13: base.AccountTypeConfig
+	(*ExchangeRate)(nil),           // 10: config.v1.ExchangeRate
+	(*GetExchangeRatesReq)(nil),    // 11: config.v1.GetExchangeRatesReq
+	(*GetExchangeRatesRes)(nil),    // 12: config.v1.GetExchangeRatesRes
+	(*SetExchangeRateReq)(nil),     // 13: config.v1.SetExchangeRateReq
+	(*SetExchangeRateRes)(nil),     // 14: config.v1.SetExchangeRateRes
+	nil,                            // 15: config.v1.GetAccountTypesRes.TypesEntry
+	(*base.BaseResponse)(nil),      // 16: base.BaseResponse
+	(*base.Theme)(nil),             // 17: base.Theme
+	(*base.AccountTypeConfig)(nil), // 18: base.AccountTypeConfig
 }
 var file_config_v1_config_proto_depIdxs = []int32{
-	11, // 0: config.v1.ListCurrenciesRes.base:type_name -> base.BaseResponse
-	11, // 1: config.v1.AddCurrencyRes.base:type_name -> base.BaseResponse
-	11, // 2: config.v1.DeleteCurrencyRes.base:type_name -> base.BaseResponse
-	12, // 3: config.v1.GetThemesRes.themes:type_name -> base.Theme
-	11, // 4: config.v1.GetThemesRes.base:type_name -> base.BaseResponse
-	10, // 5: config.v1.GetAccountTypesRes.types:type_name -> config.v1.GetAccountTypesRes.TypesEntry
-	11, // 6: config.v1.GetAccountTypesRes.base:type_name -> base.BaseResponse
-	13, // 7: config.v1.GetAccountTypesRes.TypesEntry.value:type_name -> base.AccountTypeConfig
-	0,  // 8: config.v1.ConfigService.ListCurrencies:input_type -> config.v1.ListCurrenciesReq
-	2,  // 9: config.v1.ConfigService.AddCurrency:input_type -> config.v1.AddCurrencyReq
-	4,  // 10: config.v1.ConfigService.DeleteCurrency:input_type -> config.v1.DeleteCurrencyReq
-	6,  // 11: config.v1.ConfigService.GetThemes:input_type -> config.v1.GetThemesReq
-	8,  // 12: config.v1.ConfigService.GetAccountTypes:input_type -> config.v1.GetAccountTypesReq
-	1,  // 13: config.v1.ConfigService.ListCurrencies:output_type -> config.v1.ListCurrenciesRes
-	3,  // 14: config.v1.ConfigService.AddCurrency:output_type -> config.v1.AddCurrencyRes
-	5,  // 15: config.v1.ConfigService.DeleteCurrency:output_type -> config.v1.DeleteCurrencyRes
-	7,  // 16: config.v1.ConfigService.GetThemes:output_type -> config.v1.GetThemesRes
-	9,  // 17: config.v1.ConfigService.GetAccountTypes:output_type -> config.v1.GetAccountTypesRes
-	13, // [13:18] is the sub-list for method output_type
-	8,  // [8:13] is the sub-list for method input_type
-	8,  // [8:8] is the sub-list for extension type_name
-	8,  // [8:8] is the sub-list for extension extendee
-	0,  // [0:8] is the sub-list for field type_name
+	16, // 0: config.v1.ListCurrenciesRes.base:type_name -> base.BaseResponse
+	16, // 1: config.v1.AddCurrencyRes.base:type_name -> base.BaseResponse
+	16, // 2: config.v1.DeleteCurrencyRes.base:type_name -> base.BaseResponse
+	17, // 3: config.v1.GetThemesRes.themes:type_name -> base.Theme
+	16, // 4: config.v1.GetThemesRes.base:type_name -> base.BaseResponse
+	15, // 5: config.v1.GetAccountTypesRes.types:type_name -> config.v1.GetAccountTypesRes.TypesEntry
+	16, // 6: config.v1.GetAccountTypesRes.base:type_name -> base.BaseResponse
+	10, // 7: config.v1.GetExchangeRatesRes.rates:type_name -> config.v1.ExchangeRate
+	16, // 8: config.v1.GetExchangeRatesRes.base:type_name -> base.BaseResponse
+	10, // 9: config.v1.SetExchangeRateRes.rate:type_name -> config.v1.ExchangeRate
+	16, // 10: config.v1.SetExchangeRateRes.base:type_name -> base.BaseResponse
+	18, // 11: config.v1.GetAccountTypesRes.TypesEntry.value:type_name -> base.AccountTypeConfig
+	0,  // 12: config.v1.ConfigService.ListCurrencies:input_type -> config.v1.ListCurrenciesReq
+	2,  // 13: config.v1.ConfigService.AddCurrency:input_type -> config.v1.AddCurrencyReq
+	4,  // 14: config.v1.ConfigService.DeleteCurrency:input_type -> config.v1.DeleteCurrencyReq
+	6,  // 15: config.v1.ConfigService.GetThemes:input_type -> config.v1.GetThemesReq
+	8,  // 16: config.v1.ConfigService.GetAccountTypes:input_type -> config.v1.GetAccountTypesReq
+	11, // 17: config.v1.ConfigService.GetExchangeRates:input_type -> config.v1.GetExchangeRatesReq
+	13, // 18: config.v1.ConfigService.SetExchangeRate:input_type -> config.v1.SetExchangeRateReq
+	1,  // 19: config.v1.ConfigService.ListCurrencies:output_type -> config.v1.ListCurrenciesRes
+	3,  // 20: config.v1.ConfigService.AddCurrency:output_type -> config.v1.AddCurrencyRes
+	5,  // 21: config.v1.ConfigService.DeleteCurrency:output_type -> config.v1.DeleteCurrencyRes
+	7,  // 22: config.v1.ConfigService.GetThemes:output_type -> config.v1.GetThemesRes
+	9,  // 23: config.v1.ConfigService.GetAccountTypes:output_type -> config.v1.GetAccountTypesRes
+	12, // 24: config.v1.ConfigService.GetExchangeRates:output_type -> config.v1.GetExchangeRatesRes
+	14, // 25: config.v1.ConfigService.SetExchangeRate:output_type -> config.v1.SetExchangeRateRes
+	19, // [19:26] is the sub-list for method output_type
+	12, // [12:19] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_config_v1_config_proto_init() }
@@ -596,7 +898,7 @@ func file_config_v1_config_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_config_v1_config_proto_rawDesc), len(file_config_v1_config_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

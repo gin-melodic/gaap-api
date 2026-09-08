@@ -24,12 +24,14 @@ const (
 )
 
 type DashboardSummary struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Assets        *base.Money            `protobuf:"bytes,1,opt,name=assets,proto3" json:"assets,omitempty"`
-	Liabilities   *base.Money            `protobuf:"bytes,2,opt,name=liabilities,proto3" json:"liabilities,omitempty"`
-	NetWorth      *base.Money            `protobuf:"bytes,3,opt,name=net_worth,json=netWorth,proto3" json:"net_worth,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Assets      *base.Money            `protobuf:"bytes,1,opt,name=assets,proto3" json:"assets,omitempty"`
+	Liabilities *base.Money            `protobuf:"bytes,2,opt,name=liabilities,proto3" json:"liabilities,omitempty"`
+	NetWorth    *base.Money            `protobuf:"bytes,3,opt,name=net_worth,json=netWorth,proto3" json:"net_worth,omitempty"`
+	// Currencies present in accounts but missing an exchange rate (valuation incomplete)
+	MissingCurrencies []string `protobuf:"bytes,4,rep,name=missing_currencies,json=missingCurrencies,proto3" json:"missing_currencies,omitempty" dc:"Currencies present in accounts but missing an exchange rate (valuation incomplete)"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *DashboardSummary) Reset() {
@@ -83,12 +85,21 @@ func (x *DashboardSummary) GetNetWorth() *base.Money {
 	return nil
 }
 
+func (x *DashboardSummary) GetMissingCurrencies() []string {
+	if x != nil {
+		return x.MissingCurrencies
+	}
+	return nil
+}
+
 type MonthlyStats struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Income        *base.Money            `protobuf:"bytes,1,opt,name=income,proto3" json:"income,omitempty"`
-	Expense       *base.Money            `protobuf:"bytes,2,opt,name=expense,proto3" json:"expense,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Income  *base.Money            `protobuf:"bytes,1,opt,name=income,proto3" json:"income,omitempty"`
+	Expense *base.Money            `protobuf:"bytes,2,opt,name=expense,proto3" json:"expense,omitempty"`
+	// Currencies present in transactions but missing an exchange rate
+	MissingCurrencies []string `protobuf:"bytes,3,rep,name=missing_currencies,json=missingCurrencies,proto3" json:"missing_currencies,omitempty" dc:"Currencies present in transactions but missing an exchange rate"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *MonthlyStats) Reset() {
@@ -131,6 +142,13 @@ func (x *MonthlyStats) GetIncome() *base.Money {
 func (x *MonthlyStats) GetExpense() *base.Money {
 	if x != nil {
 		return x.Expense
+	}
+	return nil
+}
+
+func (x *MonthlyStats) GetMissingCurrencies() []string {
+	if x != nil {
+		return x.MissingCurrencies
 	}
 	return nil
 }
@@ -483,14 +501,16 @@ var File_dashboard_v1_dashboard_proto protoreflect.FileDescriptor
 
 const file_dashboard_v1_dashboard_proto_rawDesc = "" +
 	"\n" +
-	"\x1cdashboard/v1/dashboard.proto\x12\fdashboard.v1\x1a\x0fbase/base.proto\"\x90\x01\n" +
+	"\x1cdashboard/v1/dashboard.proto\x12\fdashboard.v1\x1a\x0fbase/base.proto\"\xbf\x01\n" +
 	"\x10DashboardSummary\x12#\n" +
 	"\x06assets\x18\x01 \x01(\v2\v.base.MoneyR\x06assets\x12-\n" +
 	"\vliabilities\x18\x02 \x01(\v2\v.base.MoneyR\vliabilities\x12(\n" +
-	"\tnet_worth\x18\x03 \x01(\v2\v.base.MoneyR\bnetWorth\"Z\n" +
+	"\tnet_worth\x18\x03 \x01(\v2\v.base.MoneyR\bnetWorth\x12-\n" +
+	"\x12missing_currencies\x18\x04 \x03(\tR\x11missingCurrencies\"\x89\x01\n" +
 	"\fMonthlyStats\x12#\n" +
 	"\x06income\x18\x01 \x01(\v2\v.base.MoneyR\x06income\x12%\n" +
-	"\aexpense\x18\x02 \x01(\v2\v.base.MoneyR\aexpense\"\xb2\x01\n" +
+	"\aexpense\x18\x02 \x01(\v2\v.base.MoneyR\aexpense\x12-\n" +
+	"\x12missing_currencies\x18\x03 \x03(\tR\x11missingCurrencies\"\xb2\x01\n" +
 	"\fDailyBalance\x12\x12\n" +
 	"\x04date\x18\x01 \x01(\tR\x04date\x12D\n" +
 	"\bbalances\x18\x02 \x03(\v2(.dashboard.v1.DailyBalance.BalancesEntryR\bbalances\x1aH\n" +

@@ -93,7 +93,7 @@ func (s *sAccount) CreateAccount(ctx context.Context, in model.AccountCreateInpu
 		if accessErr := validateUserAccountHierarchyAccess(ctx, dbTx, in.UserId, in.IsGroup, in.ParentId); accessErr != nil {
 			return accessErr
 		}
-		resolvedCurrency, currencyErr := resolveUserBaseCurrency(ctx, dbTx, in.UserId, initialCurrency)
+		resolvedCurrency, currencyErr := resolveAccountCurrency(ctx, dbTx, in.UserId, initialCurrency)
 		if currencyErr != nil {
 			return currencyErr
 		}
@@ -229,7 +229,7 @@ func (s *sAccount) UpdateAccount(ctx context.Context, id uuid.UUID, in model.Acc
 		if accessErr := validateUserAccountHierarchyAccess(ctx, dbTx, existing.UserId, in.IsGroup, in.ParentId); accessErr != nil {
 			return accessErr
 		}
-		resolvedCurrency, currencyErr := resolveUserBaseCurrency(ctx, dbTx, existing.UserId, in.CurrencyCode)
+		resolvedCurrency, currencyErr := resolveAccountCurrency(ctx, dbTx, existing.UserId, in.CurrencyCode)
 		if currencyErr != nil {
 			return currencyErr
 		}

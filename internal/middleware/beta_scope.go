@@ -35,9 +35,7 @@ func isDeferredBetaPath(path string) bool {
 	case "/v1/auth/generate2-f-a",
 		"/v1/auth/enable2-f-a",
 		"/v1/auth/disable2-f-a",
-		"/v1/auth/update-password",
-		"/v1/config/add-currency",
-		"/v1/config/delete-currency":
+		"/v1/auth/update-password":
 		return true
 	default:
 		return false

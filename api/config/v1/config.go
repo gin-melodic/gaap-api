@@ -64,3 +64,23 @@ type GfGetAccountTypesReq struct {
 type GfGetAccountTypesRes = GetAccountTypesRes
 
 
+// GfGetExchangeRatesReq is the GoFrame-compatible request wrapper for GetExchangeRates
+type GfGetExchangeRatesReq struct {
+	g.Meta `path:"/v1/config/get-exchange-rates" method:"POST" tags:"config" summary:"Get exchange rates (reference + manual) relative to the anchor currency"`
+	GetExchangeRatesReq
+}
+
+// GfGetExchangeRatesRes is the GoFrame-compatible response wrapper for GetExchangeRates
+type GfGetExchangeRatesRes = GetExchangeRatesRes
+
+
+// GfSetExchangeRateReq is the GoFrame-compatible request wrapper for SetExchangeRate
+type GfSetExchangeRateReq struct {
+	g.Meta `path:"/v1/config/set-exchange-rate" method:"POST" tags:"config" summary:"Set a manual exchange-rate override for a currency"`
+	SetExchangeRateReq
+}
+
+// GfSetExchangeRateRes is the GoFrame-compatible response wrapper for SetExchangeRate
+type GfSetExchangeRateRes = SetExchangeRateRes
+
+

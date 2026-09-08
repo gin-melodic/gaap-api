@@ -56,6 +56,9 @@ var (
 			if err := service.DemoData().StartScheduler(ctx); err != nil {
 				return err
 			}
+			if err := service.ExchangeRate().StartScheduler(ctx); err != nil {
+				return err
+			}
 
 			s := g.Server()
 			s.BindHandler("/v1/health/live", health.Live)

@@ -52,13 +52,15 @@ func Test_Config_Currencies(t *testing.T) {
 		g.Assert(listOut[1], "USD")
 
 		// Delete Currency
-		// Expectation for DeleteCurrency
-		// Schema cached
-		// Unscoped delete -> DELETE FROM
-		// code = 1 arg
-		mock.ExpectExec("DELETE FROM \"?currencies\"?").
-			WithArgs(sqlmock.AnyArg()).
-			WillReturnResult(sqlmock.NewResult(1, 1))
+		// 1. In-use check: no active accounts reference this currency
+		mock.ExpectQuery("SELECT COUNT\\(1\\) FROM \"?accounts\"?").
+			WithArgs("CNY").
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+
+		// 2. Soft-delete the currency (sets deleted_at + updated_at)
+		mock.ExpectExec("UPDATE \"?currencies\"? SET").
+			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), "CNY").
+			WillReturnResult(sqlmock.NewResult(0, 1))
 
 		err = service.Config().DeleteCurrency(ctx, "CNY")
 		g.AssertNil(err)

@@ -2,6 +2,8 @@ package dashboard
 
 import (
 	"context"
+	"errors"
+	"sort"
 	"time"
 
 	"gaap-api/internal/dao"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/gogf/gf/v2/errors/gerror"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 type sDashboard struct{}
@@ -34,78 +37,34 @@ func (s *sDashboard) GetDashboardSummary(ctx context.Context) (out *model.Dashbo
 
 // loadDashboardSummaryFromDB fetches dashboard summary directly from the database.
 func (s *sDashboard) loadDashboardSummaryFromDB(ctx context.Context, userId string) (*model.DashboardSummary, error) {
-	out := &model.DashboardSummary{}
-
-	// Get all ASSET type accounts and sum their balances using MoneyHelper
-	var assetAccounts []entity.Accounts
-	err := dao.Accounts.Ctx(ctx).
-		Where(dao.Accounts.Columns().UserId, userId).
-		Where(dao.Accounts.Columns().Type, utils.AccountTypeAsset).
-		Where(dao.Accounts.Columns().IsGroup, false).
-		WhereNull(dao.Accounts.Columns().DeletedAt).
-		Scan(&assetAccounts)
+	baseCurrency, err := loadUserBaseCurrency(ctx, userId)
 	if err != nil {
-		return nil, gerror.Wrap(err, "failed to get asset accounts")
+		return nil, err
 	}
 
-	// Sum assets using MoneyHelper for precision
-	var totalAssets *utils.MoneyHelper
-	for _, acc := range assetAccounts {
-		accBalance := utils.NewFromEntity(&acc)
-		if totalAssets == nil {
-			totalAssets = accBalance
-			out.CurrencyCode = acc.CurrencyCode
-		} else {
-			totalAssets, err = totalAssets.Add(accBalance)
-			if err != nil {
-				// Currency mismatch - skip this account or handle differently
-				continue
-			}
-		}
-	}
-	if totalAssets != nil {
-		out.AssetsUnits, out.AssetsNanos = totalAssets.ToEntityValues()
-	}
-
-	// Get all LIABILITY type accounts
-	var liabilityAccounts []entity.Accounts
-	err = dao.Accounts.Ctx(ctx).
-		Where(dao.Accounts.Columns().UserId, userId).
-		Where(dao.Accounts.Columns().Type, utils.AccountTypeLiability).
-		Where(dao.Accounts.Columns().IsGroup, false).
-		WhereNull(dao.Accounts.Columns().DeletedAt).
-		Scan(&liabilityAccounts)
+	assetBuckets, err := s.loadAccountBuckets(ctx, userId, utils.AccountTypeAsset)
 	if err != nil {
-		return nil, gerror.Wrap(err, "failed to get liability accounts")
+		return nil, err
+	}
+	liabilityBuckets, err := s.loadAccountBuckets(ctx, userId, utils.AccountTypeLiability)
+	if err != nil {
+		return nil, err
 	}
 
-	// Sum liabilities
-	var totalLiabilities *utils.MoneyHelper
-	for _, acc := range liabilityAccounts {
-		accBalance := utils.NewFromEntity(&acc)
-		if totalLiabilities == nil {
-			totalLiabilities = accBalance
-		} else {
-			totalLiabilities, err = totalLiabilities.Add(accBalance)
-			if err != nil {
-				continue
-			}
-		}
+	totalAssets, missingAssets, err := sumValuation(ctx, assetBuckets, baseCurrency)
+	if err != nil {
+		return nil, err
 	}
-	if totalLiabilities != nil {
-		out.LiabilitiesUnits, out.LiabilitiesNanos = totalLiabilities.ToEntityValues()
+	totalLiabilities, missingLiabilities, err := sumValuation(ctx, liabilityBuckets, baseCurrency)
+	if err != nil {
+		return nil, err
 	}
 
-	// Calculate net worth (Assets - Liabilities)
-	if totalAssets != nil && totalLiabilities != nil {
-		netWorth, err := totalAssets.Sub(totalLiabilities)
-		if err == nil {
-			out.NetWorthUnits, out.NetWorthNanos = netWorth.ToEntityValues()
-		}
-	} else if totalAssets != nil {
-		out.NetWorthUnits, out.NetWorthNanos = totalAssets.ToEntityValues()
-	}
-
+	out := &model.DashboardSummary{CurrencyCode: baseCurrency}
+	out.AssetsUnits, out.AssetsNanos = decimalToUnitsNanos(totalAssets)
+	out.LiabilitiesUnits, out.LiabilitiesNanos = decimalToUnitsNanos(totalLiabilities)
+	out.NetWorthUnits, out.NetWorthNanos = decimalToUnitsNanos(totalAssets.Sub(totalLiabilities))
+	out.MissingCurrencies = mergeMissing(missingAssets, missingLiabilities)
 	return out, nil
 }
 
@@ -117,84 +76,156 @@ func (s *sDashboard) GetMonthlyStats(ctx context.Context) (out *model.MonthlySta
 
 // loadMonthlyStatsFromDB fetches monthly stats directly from the database.
 func (s *sDashboard) loadMonthlyStatsFromDB(ctx context.Context, userId string) (*model.MonthlyStats, error) {
-	out := &model.MonthlyStats{}
+	baseCurrency, err := loadUserBaseCurrency(ctx, userId)
+	if err != nil {
+		return nil, err
+	}
 
-	// Get start and end of current month
 	now := time.Now()
 	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	endOfMonth := startOfMonth.AddDate(0, 1, 0).Add(-time.Nanosecond)
 
-	// Get all INCOME transactions this month
-	var incomeTransactions []entity.Transactions
+	incomeBuckets, err := s.loadTransactionBuckets(ctx, userId, utils.TransactionTypeIncome, startOfMonth, endOfMonth)
+	if err != nil {
+		return nil, err
+	}
+	expenseBuckets, err := s.loadTransactionBuckets(ctx, userId, utils.TransactionTypeExpense, startOfMonth, endOfMonth)
+	if err != nil {
+		return nil, err
+	}
+
+	totalIncome, missingIncome, err := sumValuation(ctx, incomeBuckets, baseCurrency)
+	if err != nil {
+		return nil, err
+	}
+	totalExpense, missingExpense, err := sumValuation(ctx, expenseBuckets, baseCurrency)
+	if err != nil {
+		return nil, err
+	}
+
+	out := &model.MonthlyStats{CurrencyCode: baseCurrency}
+	out.IncomeUnits, out.IncomeNanos = decimalToUnitsNanos(totalIncome)
+	out.ExpenseUnits, out.ExpenseNanos = decimalToUnitsNanos(totalExpense)
+	out.MissingCurrencies = mergeMissing(missingIncome, missingExpense)
+	return out, nil
+}
+
+// loadUserBaseCurrency loads the user's base currency, defaulting to USD when
+// it is not configured (legacy users).
+func loadUserBaseCurrency(ctx context.Context, userId string) (string, error) {
+	var user entity.Users
+	err := dao.Users.Ctx(ctx).
+		Fields(dao.Users.Columns().MainCurrency).
+		Where(dao.Users.Columns().Id, userId).
+		WhereNull(dao.Users.Columns().DeletedAt).
+		Scan(&user)
+	if err != nil {
+		return "", gerror.Wrap(err, "failed to load user base currency")
+	}
+	base := utils.NormalizeCurrency(user.MainCurrency)
+	if base == "" {
+		return "USD", nil
+	}
+	return base, nil
+}
+
+// loadAccountBuckets sums the balances of a user's accounts of the given type,
+// bucketed by currency. Group accounts are excluded.
+func (s *sDashboard) loadAccountBuckets(ctx context.Context, userId string, accountType int) (map[string]decimal.Decimal, error) {
+	var accounts []entity.Accounts
+	err := dao.Accounts.Ctx(ctx).
+		Where(dao.Accounts.Columns().UserId, userId).
+		Where(dao.Accounts.Columns().Type, accountType).
+		Where(dao.Accounts.Columns().IsGroup, false).
+		WhereNull(dao.Accounts.Columns().DeletedAt).
+		Scan(&accounts)
+	if err != nil {
+		return nil, gerror.Wrap(err, "failed to get accounts")
+	}
+
+	buckets := make(map[string]decimal.Decimal)
+	for _, account := range accounts {
+		money := utils.NewFromEntity(&account)
+		currency := utils.NormalizeCurrency(money.Currency)
+		if existing, ok := buckets[currency]; ok {
+			buckets[currency] = existing.Add(money.Decimal)
+		} else {
+			buckets[currency] = money.Decimal
+		}
+	}
+	return buckets, nil
+}
+
+// loadTransactionBuckets sums transaction amounts of the given type within the
+// inclusive date range, bucketed by currency.
+func (s *sDashboard) loadTransactionBuckets(ctx context.Context, userId string, transactionType int, start time.Time, end time.Time) (map[string]decimal.Decimal, error) {
+	var transactions []entity.Transactions
 	err := dao.Transactions.Ctx(ctx).
 		Where(dao.Transactions.Columns().UserId, userId).
-		Where(dao.Transactions.Columns().Type, utils.TransactionTypeIncome).
-		WhereBetween(dao.Transactions.Columns().Date, startOfMonth, endOfMonth).
+		Where(dao.Transactions.Columns().Type, transactionType).
+		WhereBetween(dao.Transactions.Columns().Date, start, end).
 		WhereNull(dao.Transactions.Columns().DeletedAt).
-		Scan(&incomeTransactions)
+		Scan(&transactions)
 	if err != nil {
-		return nil, gerror.Wrap(err, "failed to get income transactions")
+		return nil, gerror.Wrap(err, "failed to get transactions")
 	}
 
-	// Sum income using MoneyHelper
-	var totalIncome *utils.MoneyHelper
-	for i, tx := range incomeTransactions {
-		// Create a temporary entity to use MoneyHelper
-		txEntity := &entity.Accounts{
-			BalanceUnits: tx.BalanceUnits,
-			BalanceNanos: tx.BalanceNanos,
-			CurrencyCode: tx.CurrencyCode,
-		}
-		txBalance := utils.NewFromEntity(txEntity)
-		if i == 0 {
-			totalIncome = txBalance
-			out.CurrencyCode = tx.CurrencyCode
+	buckets := make(map[string]decimal.Decimal)
+	for _, transaction := range transactions {
+		money := utils.NewFromTransactions(&transaction)
+		currency := utils.NormalizeCurrency(money.Currency)
+		if existing, ok := buckets[currency]; ok {
+			buckets[currency] = existing.Add(money.Decimal)
 		} else {
-			totalIncome, err = totalIncome.Add(txBalance)
-			if err != nil {
+			buckets[currency] = money.Decimal
+		}
+	}
+	return buckets, nil
+}
+
+// sumValuation converts each currency bucket into the base currency and totals
+// them. Currencies without a rate are collected and reported as missing.
+func sumValuation(ctx context.Context, buckets map[string]decimal.Decimal, base string) (decimal.Decimal, []string, error) {
+	total := decimal.NewFromInt(0)
+	missing := make([]string, 0)
+	for currency, amount := range buckets {
+		converted, err := service.ExchangeRate().Convert(ctx, amount, currency, base)
+		if err != nil {
+			if errors.Is(err, model.ErrMissingRate) {
+				missing = append(missing, currency)
 				continue
 			}
+			return decimal.Zero, nil, err
 		}
+		total = total.Add(converted)
 	}
-	if totalIncome != nil {
-		out.IncomeUnits, out.IncomeNanos = totalIncome.ToEntityValues()
-	}
+	sort.Strings(missing)
+	return total, missing, nil
+}
 
-	// Get all EXPENSE transactions this month
-	var expenseTransactions []entity.Transactions
-	err = dao.Transactions.Ctx(ctx).
-		Where(dao.Transactions.Columns().UserId, userId).
-		Where(dao.Transactions.Columns().Type, utils.TransactionTypeExpense).
-		WhereBetween(dao.Transactions.Columns().Date, startOfMonth, endOfMonth).
-		WhereNull(dao.Transactions.Columns().DeletedAt).
-		Scan(&expenseTransactions)
-	if err != nil {
-		return nil, gerror.Wrap(err, "failed to get expense transactions")
-	}
+// decimalToUnitsNanos converts an exact decimal (rounded to 9 places) into
+// units/nanos components compatible with the Money representation.
+func decimalToUnitsNanos(value decimal.Decimal) (int64, int32) {
+	money := &utils.MoneyHelper{Decimal: value.Round(9)}
+	units, nanos := money.ToEntityValues()
+	return units, nanos
+}
 
-	// Sum expenses
-	var totalExpense *utils.MoneyHelper
-	for i, tx := range expenseTransactions {
-		txEntity := &entity.Accounts{
-			BalanceUnits: tx.BalanceUnits,
-			BalanceNanos: tx.BalanceNanos,
-			CurrencyCode: tx.CurrencyCode,
-		}
-		txBalance := utils.NewFromEntity(txEntity)
-		if i == 0 {
-			totalExpense = txBalance
-		} else {
-			totalExpense, err = totalExpense.Add(txBalance)
-			if err != nil {
+// mergeMissing returns a sorted, de-duplicated list of missing currencies.
+func mergeMissing(groups ...[]string) []string {
+	seen := make(map[string]struct{})
+	out := make([]string, 0, len(groups))
+	for _, group := range groups {
+		for _, currency := range group {
+			if _, ok := seen[currency]; ok {
 				continue
 			}
+			seen[currency] = struct{}{}
+			out = append(out, currency)
 		}
 	}
-	if totalExpense != nil {
-		out.ExpenseUnits, out.ExpenseNanos = totalExpense.ToEntityValues()
-	}
-
-	return out, nil
+	sort.Strings(out)
+	return out
 }
 
 // GetBalanceTrend returns inclusive daily balance snapshots for the requested

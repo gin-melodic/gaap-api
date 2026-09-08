@@ -44,7 +44,31 @@ func validateAccountType(accountType int) error {
 	return nil
 }
 
-func resolveUserBaseCurrency(ctx context.Context, tx gdb.TX, userId uuid.UUID, requested string) (string, error) {
+// resolveAccountCurrency returns the currency for a new/updated account.
+// An empty requested currency defaults to the user's base currency; a non-empty
+// value is accepted only when it is a supported (non-deleted) currency, which
+// enables multi-currency standalone accounts.
+func resolveAccountCurrency(ctx context.Context, tx gdb.TX, userId uuid.UUID, requested string) (string, error) {
+	baseCurrency, err := loadUserBaseCurrency(ctx, tx, userId)
+	if err != nil {
+		return "", err
+	}
+	requested = utils.NormalizeCurrency(requested)
+	if requested == "" {
+		return baseCurrency, nil
+	}
+	exists, err := utils.CurrencyExists(ctx, requested)
+	if err != nil {
+		return "", err
+	}
+	if !exists {
+		return "", gerror.Newf("unsupported currency %q", requested)
+	}
+	return requested, nil
+}
+
+// loadUserBaseCurrency loads and normalizes the user's configured base currency.
+func loadUserBaseCurrency(ctx context.Context, tx gdb.TX, userId uuid.UUID) (string, error) {
 	var user entity.Users
 	err := tx.Model(dao.Users.Table()).
 		Fields(dao.Users.Columns().MainCurrency).
@@ -54,13 +78,9 @@ func resolveUserBaseCurrency(ctx context.Context, tx gdb.TX, userId uuid.UUID, r
 	if err != nil {
 		return "", gerror.Wrap(err, "failed to load user base currency")
 	}
-	baseCurrency := strings.ToUpper(strings.TrimSpace(user.MainCurrency))
+	baseCurrency := utils.NormalizeCurrency(user.MainCurrency)
 	if baseCurrency == "" {
 		return "", gerror.New("user base currency is not configured")
-	}
-	requested = strings.ToUpper(strings.TrimSpace(requested))
-	if requested != "" && requested != baseCurrency {
-		return "", gerror.New("account currency must match user base currency")
 	}
 	return baseCurrency, nil
 }

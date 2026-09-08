@@ -6,6 +6,7 @@ import (
 	"time"
 
 	_ "gaap-api/internal/logic/dashboard"
+	_ "gaap-api/internal/logic/exchangerate"
 	"gaap-api/internal/logic/utils"
 	"gaap-api/internal/middleware"
 	"gaap-api/internal/service"
@@ -29,12 +30,18 @@ func Test_Dashboard_GetDashboardSummary(t *testing.T) {
 			WithArgs(userId, "summary", "").
 			WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "snapshot_type", "snapshot_key", "data"})) // Empty result set
 
+		// 2. Base currency lookup
+		testutil.MockMeta(mock, "users", []string{"id", "email", "nickname", "avatar", "plan", "theme_id", "main_currency", "created_at", "updated_at", "deleted_at"})
+		mock.ExpectQuery("SELECT \"?main_currency\"? FROM \"?users\"?").
+			WithArgs(userId).
+			WillReturnRows(sqlmock.NewRows([]string{"main_currency"}).AddRow("USD"))
+
 		// Expectation for Assets (SELECT * FROM accounts WHERE type=Asset)
 		testutil.MockMeta(mock, "accounts", []string{"id", "balance_units", "balance_nanos", "currency_code", "type", "is_group"})
 
 		rows := sqlmock.NewRows([]string{"id", "balance_units", "balance_nanos", "currency_code", "type", "is_group", "user_id"}).
-			AddRow(uuid.New().String(), 1000, 0, "CNY", utils.AccountTypeAsset, false, userId).
-			AddRow(uuid.New().String(), 500, 500_000_000, "CNY", utils.AccountTypeAsset, false, userId)
+			AddRow(uuid.New().String(), 1000, 0, "USD", utils.AccountTypeAsset, false, userId).
+			AddRow(uuid.New().String(), 500, 500_000_000, "USD", utils.AccountTypeAsset, false, userId)
 
 		mock.ExpectQuery("SELECT .* FROM \"?accounts\"?.*").
 			WithArgs(userId, utils.AccountTypeAsset, false).
@@ -42,7 +49,7 @@ func Test_Dashboard_GetDashboardSummary(t *testing.T) {
 
 		// Expectation for Liabilities
 		lRows := sqlmock.NewRows([]string{"id", "balance_units", "balance_nanos", "currency_code", "type", "is_group", "user_id"}).
-			AddRow(uuid.New().String(), 300, 0, "CNY", utils.AccountTypeLiability, false, userId)
+			AddRow(uuid.New().String(), 300, 0, "USD", utils.AccountTypeLiability, false, userId)
 
 		mock.ExpectQuery("SELECT .* FROM \"?accounts\"?.*").
 			WithArgs(userId, utils.AccountTypeLiability, false).
@@ -79,12 +86,18 @@ func Test_Dashboard_GetMonthlyStats(t *testing.T) {
 			WithArgs(userId, "monthly", monthKey).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "snapshot_type", "snapshot_key", "data"})) // Empty result set
 
+		// 2. Base currency lookup
+		testutil.MockMeta(mock, "users", []string{"id", "email", "nickname", "avatar", "plan", "theme_id", "main_currency", "created_at", "updated_at", "deleted_at"})
+		mock.ExpectQuery("SELECT \"?main_currency\"? FROM \"?users\"?").
+			WithArgs(userId).
+			WillReturnRows(sqlmock.NewRows([]string{"main_currency"}).AddRow("USD"))
+
 		// GoFrame executes metadata queries first for the transactions table
 		testutil.MockMeta(mock, "transactions", []string{"id", "balance_units", "balance_nanos", "currency_code", "type", "date"})
 
 		// Expectation for Income
 		iRows := sqlmock.NewRows([]string{"id", "balance_units", "balance_nanos", "currency_code", "type", "user_id", "date"}).
-			AddRow(uuid.New().String(), 2000, 0, "CNY", utils.TransactionTypeIncome, userId, time.Now())
+			AddRow(uuid.New().String(), 2000, 0, "USD", utils.TransactionTypeIncome, userId, time.Now())
 
 		mock.ExpectQuery("SELECT .* FROM \"?transactions\"?.*").
 			WithArgs(userId, utils.TransactionTypeIncome, sqlmock.AnyArg(), sqlmock.AnyArg()).
@@ -92,7 +105,7 @@ func Test_Dashboard_GetMonthlyStats(t *testing.T) {
 
 		// Expectation for Expense
 		eRows := sqlmock.NewRows([]string{"id", "balance_units", "balance_nanos", "currency_code", "type", "user_id", "date"}).
-			AddRow(uuid.New().String(), 800, 0, "CNY", utils.TransactionTypeExpense, userId, time.Now())
+			AddRow(uuid.New().String(), 800, 0, "USD", utils.TransactionTypeExpense, userId, time.Now())
 
 		mock.ExpectQuery("SELECT .* FROM \"?transactions\"?.*").
 			WithArgs(userId, utils.TransactionTypeExpense, sqlmock.AnyArg(), sqlmock.AnyArg()).
