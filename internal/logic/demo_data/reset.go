@@ -2,6 +2,7 @@ package demo_data
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"strings"
 	"time"
@@ -71,11 +72,16 @@ func (s *sDemoData) ensureBaseline(ctx context.Context, config Config) error {
 		Where(userColumns.Email, config.UserEmail).
 		WhereNull(userColumns.DeletedAt).
 		Scan(&user)
-	if err != nil {
+	if err != nil && err != sql.ErrNoRows {
 		return gerror.Wrap(err, "failed to load configured demo user")
 	}
 	if user.Id == uuid.Nil {
-		return gerror.New("configured demo user was not found")
+		created, createErr := s.createDemoUser(ctx, config)
+		if createErr != nil {
+			return createErr
+		}
+		user = *created
+		g.Log().Infof(ctx, "Online demo user %s was not found; created it automatically", config.UserEmail)
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(config.UserPassword)); err != nil {
 		return gerror.New("configured demo user password does not match ONLINE_DEMO_USER_PASSWORD")
@@ -94,6 +100,13 @@ func (s *sDemoData) ensureBaseline(ctx context.Context, config Config) error {
 		}
 		if count > 0 {
 			return nil
+		}
+
+		// Provision any missing seeded accounts before capturing the immutable
+		// baseline so an existing demo user is not frozen on a partial chart of
+		// accounts that the planner cannot generate from.
+		if seedErr := seedDemoAccounts(ctx, tx, user); seedErr != nil {
+			return seedErr
 		}
 
 		accounts, transactions, runs, loadErr := loadBaselineRows(ctx, tx, user.Id)
@@ -138,6 +151,141 @@ func (s *sDemoData) ensureBaseline(ctx context.Context, config Config) error {
 		}
 		return nil
 	})
+}
+
+// defaultDemoBaseCurrency is the base currency provisioned for a freshly created
+// online demo user. It must exist in the currencies table (seeded by migrations).
+const defaultDemoBaseCurrency = "USD"
+
+// demoAccountSeeds is the chart of accounts provisioned for an online demo
+// user. Every entry's name and type must satisfy at least one template in the
+// transaction planner (see planner.go): a template whose source or destination
+// cannot be matched is silently skipped, so a gap here produces zero generated
+// transactions for the affected template.
+var demoAccountSeeds = []struct {
+	name        string
+	accountType int
+	isGroup     bool
+}{
+	{"Assets", int(utils.AccountTypeAsset), true},
+	{"Checking", int(utils.AccountTypeAsset), false},
+	{"Savings", int(utils.AccountTypeAsset), false},
+	{"Auto Loan", int(utils.AccountTypeLiability), false},
+	{"Interest", int(utils.AccountTypeIncome), false},
+	{"Salary", int(utils.AccountTypeIncome), false},
+	{"Rent", int(utils.AccountTypeExpense), false},
+	{"Subscriptions", int(utils.AccountTypeExpense), false},
+	{"Auto Insurance", int(utils.AccountTypeExpense), false},
+	{"Groceries", int(utils.AccountTypeExpense), false},
+	{"Dining", int(utils.AccountTypeExpense), false},
+	{"Transport", int(utils.AccountTypeExpense), false},
+	{"Shopping", int(utils.AccountTypeExpense), false},
+	{"Entertainment", int(utils.AccountTypeExpense), false},
+	{"Health & Fitness", int(utils.AccountTypeExpense), false},
+	{"Opening Equity", int(utils.AccountTypeEquity), false},
+}
+
+// seedDemoAccounts idempotently provisions demoAccountSeeds for the user and
+// wires the asset group, default child, and equity accounts.
+func seedDemoAccounts(ctx context.Context, tx gdb.TX, user entity.Users) error {
+	accountColumns := dao.Accounts.Columns()
+	currency := strings.ToUpper(strings.TrimSpace(user.MainCurrency))
+	if currency == "" {
+		currency = defaultDemoBaseCurrency
+	}
+
+	var existing []entity.Accounts
+	if err := tx.Model(dao.Accounts.Table()).
+		Where(accountColumns.UserId, user.Id).
+		WhereNull(accountColumns.DeletedAt).
+		OrderAsc(accountColumns.Id).
+		Scan(&existing); err != nil {
+		return gerror.Wrap(err, "failed to load accounts for demo seeding")
+	}
+	idByName := make(map[string]uuid.UUID, len(existing)+len(demoAccountSeeds))
+	for i := range existing {
+		idByName[existing[i].Name] = existing[i].Id
+	}
+
+	for _, seed := range demoAccountSeeds {
+		if _, exists := idByName[seed.name]; exists {
+			continue
+		}
+		id := uuid.New()
+		if _, err := tx.Model(dao.Accounts.Table()).Data(g.Map{
+			accountColumns.Id:           id,
+			accountColumns.UserId:       user.Id,
+			accountColumns.Name:         seed.name,
+			accountColumns.Type:         seed.accountType,
+			accountColumns.IsGroup:      seed.isGroup,
+			accountColumns.CurrencyCode: currency,
+			accountColumns.BalanceUnits: int64(0),
+			accountColumns.BalanceNanos: 0,
+		}).Insert(); err != nil {
+			return gerror.Wrapf(err, "failed to seed demo account %q", seed.name)
+		}
+		idByName[seed.name] = id
+	}
+
+	relationships := []struct {
+		name    string
+		payload g.Map
+	}{
+		{"Assets", g.Map{accountColumns.DefaultChildId: idByName["Checking"]}},
+		{"Checking", g.Map{accountColumns.ParentId: idByName["Assets"], accountColumns.EquityAccountId: idByName["Opening Equity"]}},
+		{"Savings", g.Map{accountColumns.ParentId: idByName["Assets"]}},
+	}
+	for _, ref := range relationships {
+		id, exists := idByName[ref.name]
+		if !exists {
+			return gerror.Newf("demo account %q missing after seeding", ref.name)
+		}
+		if _, err := tx.Model(dao.Accounts.Table()).Where(accountColumns.Id, id).Data(ref.payload).Update(); err != nil {
+			return gerror.Wrap(err, "failed to wire demo user account relationships")
+		}
+	}
+	return nil
+}
+
+// createDemoUser provisions the configured online demo user when it is missing
+// from the database so a fresh environment can start without manual seeding. The
+// new account ships with the full seeded chart of accounts so the planner can
+// generate income, expense, and transfer transactions immediately.
+func (s *sDemoData) createDemoUser(ctx context.Context, config Config) (*entity.Users, error) {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(config.UserPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, gerror.Wrap(err, "failed to hash configured demo password")
+	}
+	userID := uuid.New()
+
+	err = g.DB().Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
+		userColumns := dao.Users.Columns()
+		if _, err := tx.Model(dao.Users.Table()).Data(g.Map{
+			userColumns.Id:               userID,
+			userColumns.Email:            config.UserEmail,
+			userColumns.Nickname:         "Online Demo",
+			userColumns.Avatar:           "",
+			userColumns.Plan:             1,
+			userColumns.Password:         string(hashedPassword),
+			userColumns.MainCurrency:     defaultDemoBaseCurrency,
+			userColumns.ThemeId:          nil,
+			userColumns.TwoFactorSecret:  nil,
+			userColumns.TwoFactorEnabled: false,
+		}).Insert(); err != nil {
+			return gerror.Wrap(err, "failed to create configured demo user")
+		}
+		return seedDemoAccounts(ctx, tx, entity.Users{Id: userID, MainCurrency: defaultDemoBaseCurrency})
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	userColumns := dao.Users.Columns()
+	var created entity.Users
+	if err := dao.Users.Ctx(ctx).Where(userColumns.Id, userID).Scan(&created); err != nil {
+		return nil, gerror.Wrap(err, "failed to reload configured demo user")
+	}
+	return &created, nil
 }
 
 func loadBaselineRows(ctx context.Context, tx gdb.TX, userID uuid.UUID) ([]demoAccountSnapshot, []demoTransactionSnapshot, []entity.DemoDataGenerationRuns, error) {

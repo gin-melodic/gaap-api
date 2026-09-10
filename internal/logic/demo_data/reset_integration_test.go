@@ -21,7 +21,10 @@ func TestDemoResetRestoresBaselineAndLeavesOtherUsersUntouched(t *testing.T) {
 	if link == "" {
 		t.Skip("set DEMO_RESET_INTEGRATION_DATABASE_LINK to run PostgreSQL reset integration test")
 	}
-	gdb.SetConfigGroup("default", gdb.ConfigGroup{gdb.ConfigNode{Link: link}})
+	// Type is set explicitly so the link may be given with or without a driver prefix.
+	if err := gdb.SetConfigGroup("default", gdb.ConfigGroup{gdb.ConfigNode{Type: "pgsql", Link: link}}); err != nil {
+		t.Fatalf("set database config group: %v", err)
+	}
 	ctx := t.Context()
 
 	password := "integration-demo-password"
@@ -58,14 +61,26 @@ func TestDemoResetRestoresBaselineAndLeavesOtherUsersUntouched(t *testing.T) {
 			t.Fatalf("insert user: %v", err)
 		}
 	}
-	t.Cleanup(func() {
-		_, _ = dao.DemoUserBaselines.Ctx(ctx).Unscoped().Where(baselineColumns.UserId, demoUserID).Delete()
-		_, _ = dao.Transactions.Ctx(ctx).Unscoped().Where(transactionColumns.UserId, demoUserID).Delete()
-		_, _ = dao.Accounts.Ctx(ctx).Unscoped().Where(accountColumns.UserId, demoUserID).Delete()
-		_, _ = dao.Accounts.Ctx(ctx).Unscoped().Where(accountColumns.UserId, otherUserID).Delete()
-		_, _ = dao.DemoDataGenerationRuns.Ctx(ctx).Unscoped().Where(runColumns.UserId, demoUserID).Delete()
-		_, _ = dao.Users.Ctx(ctx).Unscoped().Where(userColumns.Id, []uuid.UUID{demoUserID, otherUserID}).Delete()
-	})
+	// Defer (not t.Cleanup): in Go 1.24+ t.Context() is already cancelled by the
+	// time cleanup functions run, which would make every DAO delete fail silently.
+	defer func() {
+		cleanups := []struct {
+			name string
+			del  func() error
+		}{
+			{"demo_user_baselines", func() error { _, err := dao.DemoUserBaselines.Ctx(ctx).Unscoped().Where(baselineColumns.UserId, demoUserID).Delete(); return err }},
+			{"transactions", func() error { _, err := dao.Transactions.Ctx(ctx).Unscoped().Where(transactionColumns.UserId, demoUserID).Delete(); return err }},
+			{"accounts (demo user)", func() error { _, err := dao.Accounts.Ctx(ctx).Unscoped().Where(accountColumns.UserId, demoUserID).Delete(); return err }},
+			{"accounts (other user)", func() error { _, err := dao.Accounts.Ctx(ctx).Unscoped().Where(accountColumns.UserId, otherUserID).Delete(); return err }},
+			{"demo_data_generation_runs", func() error { _, err := dao.DemoDataGenerationRuns.Ctx(ctx).Unscoped().Where(runColumns.UserId, demoUserID).Delete(); return err }},
+			{"users", func() error { _, err := dao.Users.Ctx(ctx).Unscoped().Where(userColumns.Id, []uuid.UUID{demoUserID, otherUserID}).Delete(); return err }},
+		}
+		for _, c := range cleanups {
+			if err := c.del(); err != nil {
+				t.Errorf("cleanup %s: %v", c.name, err)
+			}
+		}
+	}()
 
 	accountRows := []g.Map{
 		{accountColumns.Id: parentID, accountColumns.UserId: demoUserID, accountColumns.Name: "Assets", accountColumns.Type: 1, accountColumns.IsGroup: true, accountColumns.CurrencyCode: "USD", accountColumns.BalanceUnits: int64(0), accountColumns.BalanceNanos: 0},

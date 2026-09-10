@@ -53,8 +53,11 @@ var (
 			// be silently rewritten during startup. Rebuild derived dashboard data
 			// from the persisted source records instead.
 			boot.WarmDashboardSnapshots(ctx)
+			// The online demo scheduler must never block boot on a bad baseline or a
+			// transient infrastructure hiccup; log and keep serving so operators can
+			// fix the environment without restarting the whole API.
 			if err := service.DemoData().StartScheduler(ctx); err != nil {
-				return err
+				g.Log().Errorf(ctx, "Online demo scheduler failed to start: %v", err)
 			}
 			if err := service.ExchangeRate().StartScheduler(ctx); err != nil {
 				return err
