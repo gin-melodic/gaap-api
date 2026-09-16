@@ -21,6 +21,12 @@ service ConfigService {
   
   // Get account type definitions
   rpc GetAccountTypes(GetAccountTypesReq) returns (GetAccountTypesRes);
+  
+  // Get exchange rates (reference + manual) relative to the anchor currency
+  rpc GetExchangeRates(GetExchangeRatesReq) returns (GetExchangeRatesRes);
+  
+  // Set a manual exchange-rate override for a currency
+  rpc SetExchangeRate(SetExchangeRateReq) returns (SetExchangeRateRes);
 }
 
 message ListCurrenciesReq {}
@@ -60,5 +66,32 @@ message GetAccountTypesReq {}
 
 message GetAccountTypesRes {
   map<int32, base.AccountTypeConfig> types = 1;
+  base.BaseResponse base = 255;
+}
+
+// ExchangeRate is a single anchor-relative exchange rate. The rate is serialized
+// as a decimal string to preserve precision (never a float).
+message ExchangeRate {
+  string currency = 1;
+  string rate = 2;
+  string source = 3;
+  string updated_at = 4;
+}
+
+message GetExchangeRatesReq {}
+
+message GetExchangeRatesRes {
+  string anchor = 1;
+  repeated ExchangeRate rates = 2;
+  base.BaseResponse base = 255;
+}
+
+message SetExchangeRateReq {
+  string currency = 1;
+  string rate = 2;
+}
+
+message SetExchangeRateRes {
+  ExchangeRate rate = 1;
   base.BaseResponse base = 255;
 }

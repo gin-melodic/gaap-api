@@ -1,21 +1,23 @@
 package model
 
 type DashboardSummary struct {
-	AssetsUnits      int64
-	AssetsNanos      int32
-	LiabilitiesUnits int64
-	LiabilitiesNanos int32
-	NetWorthUnits    int64
-	NetWorthNanos    int32
-	CurrencyCode     string
+	AssetsUnits       int64
+	AssetsNanos       int32
+	LiabilitiesUnits  int64
+	LiabilitiesNanos  int32
+	NetWorthUnits     int64
+	NetWorthNanos     int32
+	CurrencyCode      string
+	MissingCurrencies []string
 }
 
 type MonthlyStats struct {
-	IncomeUnits  int64
-	IncomeNanos  int32
-	ExpenseUnits int64
-	ExpenseNanos int32
-	CurrencyCode string
+	IncomeUnits       int64
+	IncomeNanos       int32
+	ExpenseUnits      int64
+	ExpenseNanos      int32
+	CurrencyCode      string
+	MissingCurrencies []string
 }
 
 type DailyBalance struct {

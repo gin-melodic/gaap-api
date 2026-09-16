@@ -93,7 +93,7 @@ func (s *sAccount) CreateAccount(ctx context.Context, in model.AccountCreateInpu
 		if accessErr := validateUserAccountHierarchyAccess(ctx, dbTx, in.UserId, in.IsGroup, in.ParentId); accessErr != nil {
 			return accessErr
 		}
-		resolvedCurrency, currencyErr := resolveUserBaseCurrency(ctx, dbTx, in.UserId, initialCurrency)
+		resolvedCurrency, currencyErr := resolveAccountCurrency(ctx, dbTx, in.UserId, initialCurrency)
 		if currencyErr != nil {
 			return currencyErr
 		}
@@ -229,7 +229,7 @@ func (s *sAccount) UpdateAccount(ctx context.Context, id uuid.UUID, in model.Acc
 		if accessErr := validateUserAccountHierarchyAccess(ctx, dbTx, existing.UserId, in.IsGroup, in.ParentId); accessErr != nil {
 			return accessErr
 		}
-		resolvedCurrency, currencyErr := resolveUserBaseCurrency(ctx, dbTx, existing.UserId, in.CurrencyCode)
+		resolvedCurrency, currencyErr := resolveAccountCurrency(ctx, dbTx, existing.UserId, in.CurrencyCode)
 		if currencyErr != nil {
 			return currencyErr
 		}
@@ -336,13 +336,20 @@ func (s *sAccount) DeleteAccount(ctx context.Context, id uuid.UUID, migrationTar
 	accountIds := []uuid.UUID{id}
 	err = g.DB().Transaction(ctx, func(ctx context.Context, dbTx gdb.TX) error {
 		if account.IsGroup {
+			// Scan into a struct slice: scanning directly into []uuid.UUID yields
+			// zero UUIDs (gconv cannot map a single column row onto a bare
+			// uuid.UUID element), which silently corrupts the IN(...) list below.
+			var childAccounts []entity.Accounts
 			scanErr := dbTx.Model(dao.Accounts.Table()).
 				Fields(dao.Accounts.Columns().Id).
 				Where(dao.Accounts.Columns().ParentId, id).
 				WhereNull(dao.Accounts.Columns().DeletedAt).
-				Scan(&childAccountIds)
+				Scan(&childAccounts)
 			if scanErr != nil {
 				return gerror.Wrap(scanErr, "failed to get child accounts")
+			}
+			for _, child := range childAccounts {
+				childAccountIds = append(childAccountIds, child.Id)
 			}
 		}
 		accountIds = append(accountIds, childAccountIds...)

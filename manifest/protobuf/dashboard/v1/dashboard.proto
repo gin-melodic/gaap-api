@@ -21,11 +21,15 @@ message DashboardSummary {
   base.Money assets = 1;
   base.Money liabilities = 2;
   base.Money net_worth = 3;
+  // Currencies present in accounts but missing an exchange rate (valuation incomplete)
+  repeated string missing_currencies = 4;
 }
 
 message MonthlyStats {
   base.Money income = 1;
   base.Money expense = 2;
+  // Currencies present in transactions but missing an exchange rate
+  repeated string missing_currencies = 3;
 }
 
 message DailyBalance {

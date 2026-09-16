@@ -16,7 +16,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
   musl-dev \
   git \
   && go install github.com/air-verse/air@v1.61.7 \
-  && go install github.com/go-delve/delve/cmd/dlv@latest
+  && go install github.com/go-delve/delve/cmd/dlv@v1.23.1
 
 # Copy Go module files for dependency caching
 COPY go.mod go.sum ./
@@ -91,6 +91,11 @@ WORKDIR /app
 # Create non-root user for security
 RUN addgroup -g 1001 -S gaap && \
   adduser -u 1001 -S gaap -G gaap
+
+# Writable log directory (DEF-032): seeded into the api_logs volume on first run.
+# The container is read_only, so /app/logs must come from this image for the
+# named-volume copy-up to carry gaap ownership and be writable by the app user.
+RUN mkdir -p /app/logs && chown gaap:gaap /app/logs
 
 COPY --from=builder --chown=gaap:gaap /app/main .
 COPY --from=builder --chown=gaap:gaap /app/reconcile .

@@ -56,22 +56,16 @@ func validateTransactionAccounts(
 		return err
 	}
 
-	var user entity.Users
-	err := tx.Model(dao.Users.Table()).
-		Fields(dao.Users.Columns().MainCurrency).
-		Where(dao.Users.Columns().Id, userId).
-		WhereNull(dao.Users.Columns().DeletedAt).
-		Scan(&user)
+	currency := utils.NormalizeCurrency(in.CurrencyCode)
+	if currency == "" {
+		return gerror.New("transaction currency is required")
+	}
+	exists, err := utils.CurrencyExists(ctx, currency)
 	if err != nil {
-		return gerror.Wrap(err, "failed to load user currency")
+		return err
 	}
-	if user.MainCurrency == "" {
-		return gerror.New("user base currency is not configured")
-	}
-
-	currency := strings.ToUpper(strings.TrimSpace(in.CurrencyCode))
-	if currency != strings.ToUpper(user.MainCurrency) {
-		return gerror.New("transaction currency must match user base currency")
+	if !exists {
+		return gerror.Newf("unsupported currency %q", currency)
 	}
 	in.CurrencyCode = currency
 

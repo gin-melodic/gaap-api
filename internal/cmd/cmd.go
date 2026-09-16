@@ -45,12 +45,21 @@ var (
 			if err := boot.InitALE(ctx); err != nil {
 				return err
 			}
+			if err := boot.StartupReconcile(ctx); err != nil {
+				return err
+			}
 
 			// Account balances are committed atomically with transactions and must not
 			// be silently rewritten during startup. Rebuild derived dashboard data
 			// from the persisted source records instead.
 			boot.WarmDashboardSnapshots(ctx)
+			// The online demo scheduler must never block boot on a bad baseline or a
+			// transient infrastructure hiccup; log and keep serving so operators can
+			// fix the environment without restarting the whole API.
 			if err := service.DemoData().StartScheduler(ctx); err != nil {
+				g.Log().Errorf(ctx, "Online demo scheduler failed to start: %v", err)
+			}
+			if err := service.ExchangeRate().StartScheduler(ctx); err != nil {
 				return err
 			}
 

@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	AuthService_Login_FullMethodName           = "/auth.v1.AuthService/Login"
+	AuthService_DemoLogin_FullMethodName       = "/auth.v1.AuthService/DemoLogin"
 	AuthService_Register_FullMethodName        = "/auth.v1.AuthService/Register"
 	AuthService_Logout_FullMethodName          = "/auth.v1.AuthService/Logout"
 	AuthService_RefreshToken_FullMethodName    = "/auth.v1.AuthService/RefreshToken"
@@ -37,6 +38,8 @@ const (
 type AuthServiceClient interface {
 	// User login
 	Login(ctx context.Context, in *LoginReq, opts ...grpc.CallOption) (*LoginRes, error)
+	// Passwordless login for the configured online demo user
+	DemoLogin(ctx context.Context, in *DemoLoginReq, opts ...grpc.CallOption) (*LoginRes, error)
 	// User registration
 	Register(ctx context.Context, in *RegisterReq, opts ...grpc.CallOption) (*RegisterRes, error)
 	// User logout
@@ -67,6 +70,16 @@ func (c *authServiceClient) Login(ctx context.Context, in *LoginReq, opts ...grp
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(LoginRes)
 	err := c.cc.Invoke(ctx, AuthService_Login_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) DemoLogin(ctx context.Context, in *DemoLoginReq, opts ...grpc.CallOption) (*LoginRes, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LoginRes)
+	err := c.cc.Invoke(ctx, AuthService_DemoLogin_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -159,6 +172,8 @@ func (c *authServiceClient) GetCurrencyList(ctx context.Context, in *GetCurrency
 type AuthServiceServer interface {
 	// User login
 	Login(context.Context, *LoginReq) (*LoginRes, error)
+	// Passwordless login for the configured online demo user
+	DemoLogin(context.Context, *DemoLoginReq) (*LoginRes, error)
 	// User registration
 	Register(context.Context, *RegisterReq) (*RegisterRes, error)
 	// User logout
@@ -187,6 +202,9 @@ type UnimplementedAuthServiceServer struct{}
 
 func (UnimplementedAuthServiceServer) Login(context.Context, *LoginReq) (*LoginRes, error) {
 	return nil, status.Error(codes.Unimplemented, "method Login not implemented")
+}
+func (UnimplementedAuthServiceServer) DemoLogin(context.Context, *DemoLoginReq) (*LoginRes, error) {
+	return nil, status.Error(codes.Unimplemented, "method DemoLogin not implemented")
 }
 func (UnimplementedAuthServiceServer) Register(context.Context, *RegisterReq) (*RegisterRes, error) {
 	return nil, status.Error(codes.Unimplemented, "method Register not implemented")
@@ -247,6 +265,24 @@ func _AuthService_Login_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AuthServiceServer).Login(ctx, req.(*LoginReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_DemoLogin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DemoLoginReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).DemoLogin(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_DemoLogin_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).DemoLogin(ctx, req.(*DemoLoginReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -405,6 +441,10 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Login",
 			Handler:    _AuthService_Login_Handler,
+		},
+		{
+			MethodName: "DemoLogin",
+			Handler:    _AuthService_DemoLogin_Handler,
 		},
 		{
 			MethodName: "Register",

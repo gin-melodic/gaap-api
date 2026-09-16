@@ -230,7 +230,7 @@ func CheckImportLock(ctx context.Context) error {
 	}
 
 	if hasActive {
-		return gerror.New("操作已暂停：正在导入数据，请等待导入完成后再试")
+		return gerror.New("operation paused: an import is in progress, please wait for it to complete before retrying")
 	}
 
 	return nil

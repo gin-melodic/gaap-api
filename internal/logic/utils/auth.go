@@ -54,7 +54,7 @@ var (
 	UserAccessor = FieldAccessor[entity.Users]{
 		Model:           func(ctx context.Context) *gdb.Model { return dao.Users.Ctx(ctx) },
 		IdGetter:        func(u *entity.Users) uuid.UUID { return u.Id },
-		UserIdGetter:    func(u *entity.Users) uuid.UUID { return u.Id }, // 用户验证自己
+		UserIdGetter:    func(u *entity.Users) uuid.UUID { return u.Id }, // user verifies themselves
 		IdColumn:        dao.Users.Columns().Id,
 		DeletedAtColumn: dao.Users.Columns().DeletedAt,
 		ResourceName:    "user",

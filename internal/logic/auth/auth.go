@@ -11,6 +11,7 @@ import (
 
 	"gaap-api/internal/ale"
 	"gaap-api/internal/dao"
+	"gaap-api/internal/logic/demo_data"
 	"gaap-api/internal/logic/utils"
 	"gaap-api/internal/model"
 	"gaap-api/internal/model/entity"
@@ -80,11 +81,30 @@ func getJwtSecret(ctx context.Context) []byte {
 }
 
 func (s *sAuth) Login(ctx context.Context, in model.LoginInput) (out *model.AuthResponse, err error) {
+	return s.login(ctx, in, false)
+}
+
+// DemoLogin authenticates the configured demo user without requiring a
+// browser-supplied password or Turnstile token.
+func (s *sAuth) DemoLogin(ctx context.Context) (out *model.AuthResponse, err error) {
+	config, err := demo_data.LoadConfig(ctx)
+	if err != nil || !config.OnlineDemoEnabled {
+		return nil, gerror.New("demo login unavailable")
+	}
+	return s.login(ctx, model.LoginInput{
+		Email:    config.UserEmail,
+		Password: config.UserPassword,
+	}, true)
+}
+
+func (s *sAuth) login(ctx context.Context, in model.LoginInput, skipTurnstile bool) (out *model.AuthResponse, err error) {
 	in.Email = strings.ToLower(strings.TrimSpace(in.Email))
 	if in.Email == "" || in.Password == "" {
 		return nil, gerror.New("email and password are required")
 	}
-	if in.CfTurnstileResponse == "" {
+	if skipTurnstile {
+		// The demo credentials came from the API process environment, never the browser.
+	} else if in.CfTurnstileResponse == "" {
 		if isProductionEnvironment() {
 			return nil, gerror.New("invalid email or password")
 		}
@@ -283,6 +303,9 @@ func validateRegistrationInput(in *model.RegisterInput) error {
 
 func (s *sAuth) Generate2FA(ctx context.Context) (out *model.TwoFactorSecret, err error) {
 	userId := utils.RequireUserId(ctx)
+	if err := rejectDemoSecurityChange(ctx, userId); err != nil {
+		return nil, err
+	}
 
 	var user *entity.Users
 	err = dao.Users.Ctx(ctx).Where(dao.Users.Columns().Id, userId).Scan(&user)
@@ -319,6 +342,9 @@ func (s *sAuth) Generate2FA(ctx context.Context) (out *model.TwoFactorSecret, er
 
 func (s *sAuth) Enable2FA(ctx context.Context, code string) (err error) {
 	userId := utils.RequireUserId(ctx)
+	if err := rejectDemoSecurityChange(ctx, userId); err != nil {
+		return err
+	}
 
 	var user *entity.Users
 	err = dao.Users.Ctx(ctx).Where(dao.Users.Columns().Id, userId).Scan(&user)
@@ -343,6 +369,9 @@ func (s *sAuth) Enable2FA(ctx context.Context, code string) (err error) {
 
 func (s *sAuth) Disable2FA(ctx context.Context, code string, password string) (err error) {
 	userId := utils.RequireUserId(ctx)
+	if err := rejectDemoSecurityChange(ctx, userId); err != nil {
+		return err
+	}
 
 	var user *entity.Users
 	err = dao.Users.Ctx(ctx).Where(dao.Users.Columns().Id, userId).Scan(&user)
@@ -556,6 +585,9 @@ func isRegistrationEmailAllowed(email string) bool {
 
 func (s *sAuth) UpdatePassword(ctx context.Context, password, newPassword, confirmPassword string) error {
 	userId := utils.RequireUserId(ctx)
+	if err := rejectDemoSecurityChange(ctx, userId); err != nil {
+		return err
+	}
 
 	if newPassword == "" {
 		return gerror.New("new password is required")
@@ -607,6 +639,29 @@ func (s *sAuth) UpdatePassword(ctx context.Context, password, newPassword, confi
 
 		return nil
 	})
+}
+
+func rejectDemoSecurityChange(ctx context.Context, userID string) error {
+	config, err := demo_data.LoadConfig(ctx)
+	if err != nil {
+		return err
+	}
+	if !config.OnlineDemoEnabled {
+		return nil
+	}
+	columns := dao.Users.Columns()
+	count, err := dao.Users.Ctx(ctx).
+		Where(columns.Id, userID).
+		Where(columns.Email, config.UserEmail).
+		WhereNull(columns.DeletedAt).
+		Count()
+	if err != nil {
+		return gerror.Wrap(err, "failed to verify demo user")
+	}
+	if count > 0 {
+		return gerror.New("demo user security settings cannot be changed")
+	}
+	return nil
 }
 
 // GetCurrencyList returns a list of all supported currencies

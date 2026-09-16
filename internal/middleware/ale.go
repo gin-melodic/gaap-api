@@ -48,6 +48,7 @@ func ALEMiddleware(mode ALEMode) func(r *ghttp.Request) {
 		actualMode := mode
 		publicAuthPaths := map[string]bool{
 			"/v1/auth/login":             true,
+			"/v1/auth/demo-login":        true,
 			"/v1/auth/register":          true,
 			"/v1/auth/refresh-token":     true,
 			"/v1/auth/get-currency-list": true,

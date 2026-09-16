@@ -10,6 +10,9 @@ import "user/v1/user.proto";
 service AuthService {
   // User login
   rpc Login(LoginReq) returns (LoginRes);
+
+  // Passwordless login for the configured online demo user
+  rpc DemoLogin(DemoLoginReq) returns (LoginRes);
   
   // User registration
   rpc Register(RegisterReq) returns (RegisterRes);
@@ -64,6 +67,8 @@ message LoginRes {
   AuthResponse auth = 1;
   base.BaseResponse base = 255;
 }
+
+message DemoLoginReq {}
 
 message RegisterReq {
   string email = 1;

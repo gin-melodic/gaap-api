@@ -17,7 +17,9 @@ const (
 
 type Config struct {
 	Enabled                bool
+	OnlineDemoEnabled      bool
 	UserEmail              string
+	UserPassword           string
 	StartDate              time.Time
 	InitialBackfillEndDate time.Time
 	Location               *time.Location
@@ -48,13 +50,21 @@ func LoadConfig(_ context.Context) (Config, error) {
 	}
 
 	userEmail := strings.ToLower(strings.TrimSpace(os.Getenv("ONLINE_DEMO_USER_EMAIL")))
-	if enabled && userEmail == "" {
-		return Config{}, gerror.New("ONLINE_DEMO_USER_EMAIL is required when demo data generation is enabled")
+	userPassword := os.Getenv("ONLINE_DEMO_USER_PASSWORD")
+	hasEmail := userEmail != ""
+	hasPassword := strings.TrimSpace(userPassword) != ""
+	if hasEmail != hasPassword {
+		return Config{}, gerror.New("ONLINE_DEMO_USER_EMAIL and ONLINE_DEMO_USER_PASSWORD must be configured together")
+	}
+	if enabled && !hasEmail {
+		return Config{}, gerror.New("online demo credentials are required when demo data generation is enabled")
 	}
 
 	return Config{
 		Enabled:                enabled,
+		OnlineDemoEnabled:      hasEmail && hasPassword,
 		UserEmail:              userEmail,
+		UserPassword:           userPassword,
 		StartDate:              startDate,
 		InitialBackfillEndDate: initialBackfillEndDate,
 		Location:               location,

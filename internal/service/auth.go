@@ -13,6 +13,9 @@ import (
 type (
 	IAuth interface {
 		Login(ctx context.Context, in model.LoginInput) (out *model.AuthResponse, err error)
+		// DemoLogin authenticates the configured demo user without requiring a
+		// browser-supplied password or Turnstile token.
+		DemoLogin(ctx context.Context) (out *model.AuthResponse, err error)
 		Register(ctx context.Context, in model.RegisterInput) (out *model.AuthResponse, err error)
 		Generate2FA(ctx context.Context) (out *model.TwoFactorSecret, err error)
 		Enable2FA(ctx context.Context, code string) (err error)

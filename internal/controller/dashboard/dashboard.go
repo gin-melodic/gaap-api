@@ -31,6 +31,7 @@ func summaryToProto(s *model.DashboardSummary) *v1.DashboardSummary {
 			Units:        s.NetWorthUnits,
 			Nanos:        s.NetWorthNanos,
 		},
+		MissingCurrencies: s.MissingCurrencies,
 	}
 }
 
@@ -50,6 +51,7 @@ func monthlyStatsToProto(s *model.MonthlyStats) *v1.MonthlyStats {
 			Units:        s.ExpenseUnits,
 			Nanos:        s.ExpenseNanos,
 		},
+		MissingCurrencies: s.MissingCurrencies,
 	}
 }
 

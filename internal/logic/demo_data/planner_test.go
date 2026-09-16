@@ -1,6 +1,7 @@
 package demo_data
 
 import (
+	"crypto/sha1"
 	"reflect"
 	"testing"
 	"time"
@@ -82,6 +83,119 @@ func TestFitToAvailableBalanceBoundaries(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSeededDemoAccountsResolveEveryPlannerTemplate(t *testing.T) {
+	userID := uuid.New()
+	states := make([]*accountState, 0, len(demoAccountSeeds))
+	for _, seed := range demoAccountSeeds {
+		states = append(states, &accountState{account: entity.Accounts{
+			Id:           seededAccountID(seed.name),
+			UserId:       userID,
+			Name:         seed.name,
+			Type:         seed.accountType,
+			IsGroup:      seed.isGroup,
+			CurrencyCode: defaultDemoBaseCurrency,
+		}})
+	}
+
+	check := func(template string, accountType int, keywords []string) {
+		t.Helper()
+		if candidates := filterAccounts(states, accountType, keywords, uuid.Nil); len(candidates) == 0 {
+			t.Errorf("no seeded demo account resolves the %q template (type=%d, keywords=%v)", template, accountType, keywords)
+		}
+	}
+
+	// Recurring templates (recurringTemplates).
+	check("savings interest income", int(utils.AccountTypeIncome), []string{"interest"})
+	check("savings interest destination", int(utils.AccountTypeAsset), []string{"saving"})
+	check("apartment rent source", int(utils.AccountTypeAsset), []string{"checking"})
+	check("apartment rent destination", int(utils.AccountTypeExpense), []string{"rent"})
+	check("subscriptions destination", int(utils.AccountTypeExpense), []string{"subscription"})
+	check("auto insurance destination", int(utils.AccountTypeExpense), []string{"insurance"})
+	check("auto loan payment destination", int(utils.AccountTypeLiability), []string{"loan"})
+	check("savings transfer destination", int(utils.AccountTypeAsset), []string{"saving"})
+	check("biweekly payroll income", int(utils.AccountTypeIncome), []string{"salary"})
+	check("biweekly payroll destination", int(utils.AccountTypeAsset), []string{"checking"})
+
+	// Random templates (randomTemplate).
+	check("freelance income source", int(utils.AccountTypeIncome), nil)
+	check("freelance income destination", int(utils.AccountTypeAsset), []string{"checking", "saving"})
+	for _, keywords := range [][]string{
+		{"grocer"}, {"dining"}, {"gas", "transport"}, {"shopping"}, {"entertainment"}, {"health", "fitness"},
+	} {
+		check("random expense destination", int(utils.AccountTypeExpense), keywords)
+	}
+}
+
+func TestSeededDemoAccountsGenerateTransactionsOverAMonth(t *testing.T) {
+	location := mustLocation(t)
+	// A fixed user id keeps the seeded RNG deterministic across runs.
+	user := entity.Users{Id: uuid.MustParse("0d9a4f2e-1b3c-4a5d-9e7f-8a1b2c3d4e5f"), MainCurrency: "USD"}
+
+	// Funded accounts: expense and transfer templates can resolve as well.
+	funded := seededDemoAccountEntities(user.Id)
+	for i := range funded {
+		if funded[i].Name == "Checking" {
+			funded[i].BalanceUnits = 20_000
+		}
+	}
+	total, emptyDays := 0, 0
+	for day := 1; day <= 30; day++ {
+		date := time.Date(2026, time.April, day, 0, 0, 0, 0, location)
+		planned, err := planTransactions(user, funded, date, location)
+		if err != nil {
+			t.Fatalf("funded plan failed on day %d: %v", day, err)
+		}
+		total += len(planned)
+		if len(planned) == 0 {
+			emptyDays++
+		}
+	}
+	if total < 10 {
+		t.Fatalf("funded seeded demo accounts planned only %d transactions over April, want >= 10", total)
+	}
+	if emptyDays > 6 {
+		t.Fatalf("%d of 30 funded days planned zero transactions, want at most 6", emptyDays)
+	}
+
+	// Unfunded (freshly created) accounts: only income templates can plan, but
+	// the month must still produce activity instead of the historical zero.
+	freshTotal := 0
+	for day := 1; day <= 30; day++ {
+		date := time.Date(2026, time.April, day, 0, 0, 0, 0, location)
+		planned, err := planTransactions(user, seededDemoAccountEntities(user.Id), date, location)
+		if err != nil {
+			t.Fatalf("fresh plan failed on day %d: %v", day, err)
+		}
+		freshTotal += len(planned)
+	}
+	if freshTotal == 0 {
+		t.Fatal("freshly seeded demo accounts planned zero transactions over April")
+	}
+}
+
+func seededAccountID(name string) uuid.UUID {
+	sum := sha1.Sum([]byte("gaap-demo-account/" + name))
+	var out uuid.UUID
+	copy(out[:], sum[:])
+	return out
+}
+
+func seededDemoAccountEntities(userID uuid.UUID) []entity.Accounts {
+	accounts := make([]entity.Accounts, 0, len(demoAccountSeeds))
+	for _, seed := range demoAccountSeeds {
+		accounts = append(accounts, entity.Accounts{
+			Id:           seededAccountID(seed.name),
+			UserId:       userID,
+			Name:         seed.name,
+			Type:         seed.accountType,
+			IsGroup:      seed.isGroup,
+			CurrencyCode: defaultDemoBaseCurrency,
+			BalanceUnits: 0,
+		})
+	}
+	return accounts
 }
 
 func TestPlanRejectsExistingNegativeFinancialAccount(t *testing.T) {

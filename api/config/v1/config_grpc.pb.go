@@ -20,11 +20,13 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ConfigService_ListCurrencies_FullMethodName  = "/config.v1.ConfigService/ListCurrencies"
-	ConfigService_AddCurrency_FullMethodName     = "/config.v1.ConfigService/AddCurrency"
-	ConfigService_DeleteCurrency_FullMethodName  = "/config.v1.ConfigService/DeleteCurrency"
-	ConfigService_GetThemes_FullMethodName       = "/config.v1.ConfigService/GetThemes"
-	ConfigService_GetAccountTypes_FullMethodName = "/config.v1.ConfigService/GetAccountTypes"
+	ConfigService_ListCurrencies_FullMethodName   = "/config.v1.ConfigService/ListCurrencies"
+	ConfigService_AddCurrency_FullMethodName      = "/config.v1.ConfigService/AddCurrency"
+	ConfigService_DeleteCurrency_FullMethodName   = "/config.v1.ConfigService/DeleteCurrency"
+	ConfigService_GetThemes_FullMethodName        = "/config.v1.ConfigService/GetThemes"
+	ConfigService_GetAccountTypes_FullMethodName  = "/config.v1.ConfigService/GetAccountTypes"
+	ConfigService_GetExchangeRates_FullMethodName = "/config.v1.ConfigService/GetExchangeRates"
+	ConfigService_SetExchangeRate_FullMethodName  = "/config.v1.ConfigService/SetExchangeRate"
 )
 
 // ConfigServiceClient is the client API for ConfigService service.
@@ -41,6 +43,10 @@ type ConfigServiceClient interface {
 	GetThemes(ctx context.Context, in *GetThemesReq, opts ...grpc.CallOption) (*GetThemesRes, error)
 	// Get account type definitions
 	GetAccountTypes(ctx context.Context, in *GetAccountTypesReq, opts ...grpc.CallOption) (*GetAccountTypesRes, error)
+	// Get exchange rates (reference + manual) relative to the anchor currency
+	GetExchangeRates(ctx context.Context, in *GetExchangeRatesReq, opts ...grpc.CallOption) (*GetExchangeRatesRes, error)
+	// Set a manual exchange-rate override for a currency
+	SetExchangeRate(ctx context.Context, in *SetExchangeRateReq, opts ...grpc.CallOption) (*SetExchangeRateRes, error)
 }
 
 type configServiceClient struct {
@@ -101,6 +107,26 @@ func (c *configServiceClient) GetAccountTypes(ctx context.Context, in *GetAccoun
 	return out, nil
 }
 
+func (c *configServiceClient) GetExchangeRates(ctx context.Context, in *GetExchangeRatesReq, opts ...grpc.CallOption) (*GetExchangeRatesRes, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetExchangeRatesRes)
+	err := c.cc.Invoke(ctx, ConfigService_GetExchangeRates_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *configServiceClient) SetExchangeRate(ctx context.Context, in *SetExchangeRateReq, opts ...grpc.CallOption) (*SetExchangeRateRes, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetExchangeRateRes)
+	err := c.cc.Invoke(ctx, ConfigService_SetExchangeRate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ConfigServiceServer is the server API for ConfigService service.
 // All implementations must embed UnimplementedConfigServiceServer
 // for forward compatibility.
@@ -115,6 +141,10 @@ type ConfigServiceServer interface {
 	GetThemes(context.Context, *GetThemesReq) (*GetThemesRes, error)
 	// Get account type definitions
 	GetAccountTypes(context.Context, *GetAccountTypesReq) (*GetAccountTypesRes, error)
+	// Get exchange rates (reference + manual) relative to the anchor currency
+	GetExchangeRates(context.Context, *GetExchangeRatesReq) (*GetExchangeRatesRes, error)
+	// Set a manual exchange-rate override for a currency
+	SetExchangeRate(context.Context, *SetExchangeRateReq) (*SetExchangeRateRes, error)
 	mustEmbedUnimplementedConfigServiceServer()
 }
 
@@ -139,6 +169,12 @@ func (UnimplementedConfigServiceServer) GetThemes(context.Context, *GetThemesReq
 }
 func (UnimplementedConfigServiceServer) GetAccountTypes(context.Context, *GetAccountTypesReq) (*GetAccountTypesRes, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAccountTypes not implemented")
+}
+func (UnimplementedConfigServiceServer) GetExchangeRates(context.Context, *GetExchangeRatesReq) (*GetExchangeRatesRes, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetExchangeRates not implemented")
+}
+func (UnimplementedConfigServiceServer) SetExchangeRate(context.Context, *SetExchangeRateReq) (*SetExchangeRateRes, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetExchangeRate not implemented")
 }
 func (UnimplementedConfigServiceServer) mustEmbedUnimplementedConfigServiceServer() {}
 func (UnimplementedConfigServiceServer) testEmbeddedByValue()                       {}
@@ -251,6 +287,42 @@ func _ConfigService_GetAccountTypes_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ConfigService_GetExchangeRates_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetExchangeRatesReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ConfigServiceServer).GetExchangeRates(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ConfigService_GetExchangeRates_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ConfigServiceServer).GetExchangeRates(ctx, req.(*GetExchangeRatesReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ConfigService_SetExchangeRate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetExchangeRateReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ConfigServiceServer).SetExchangeRate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ConfigService_SetExchangeRate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ConfigServiceServer).SetExchangeRate(ctx, req.(*SetExchangeRateReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ConfigService_ServiceDesc is the grpc.ServiceDesc for ConfigService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -277,6 +349,14 @@ var ConfigService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAccountTypes",
 			Handler:    _ConfigService_GetAccountTypes_Handler,
+		},
+		{
+			MethodName: "GetExchangeRates",
+			Handler:    _ConfigService_GetExchangeRates_Handler,
+		},
+		{
+			MethodName: "SetExchangeRate",
+			Handler:    _ConfigService_SetExchangeRate_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

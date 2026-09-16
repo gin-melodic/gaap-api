@@ -79,3 +79,11 @@ func TestProductionLoginRequiresTurnstile(t *testing.T) {
 		t.Fatalf("production login without Turnstile returned %v", err)
 	}
 }
+
+func TestDemoLoginRequiresConfiguredCredentialPair(t *testing.T) {
+	t.Setenv("ONLINE_DEMO_USER_EMAIL", "")
+	t.Setenv("ONLINE_DEMO_USER_PASSWORD", "")
+	if _, err := New().DemoLogin(context.Background()); err == nil || err.Error() != "demo login unavailable" {
+		t.Fatalf("demo login without credentials returned %v", err)
+	}
+}

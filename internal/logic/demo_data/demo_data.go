@@ -28,15 +28,19 @@ func New() *sDemoData {
 	return &sDemoData{}
 }
 
-// StartScheduler starts the demo catch-up loop when explicitly enabled.
+// StartScheduler validates the online demo, captures its immutable baseline,
+// and starts the daily reset/catch-up loop.
 func (s *sDemoData) StartScheduler(ctx context.Context) error {
 	config, err := LoadConfig(ctx)
 	if err != nil {
 		return err
 	}
-	if !config.Enabled {
-		g.Log().Info(ctx, "Demo data generator is disabled")
+	if !config.OnlineDemoEnabled {
+		g.Log().Info(ctx, "Online demo is disabled")
 		return nil
+	}
+	if err := s.ensureBaseline(ctx, config); err != nil {
+		return err
 	}
 
 	go s.runScheduler(ctx, config)
@@ -58,10 +62,14 @@ func (s *sDemoData) CatchUp(ctx context.Context) (int, error) {
 
 func (s *sDemoData) runScheduler(ctx context.Context, config Config) {
 	for {
-		_, err := s.catchUpWithConfig(ctx, config, time.Now())
+		now := time.Now()
+		_, err := s.resetForDate(ctx, config, now)
+		if err == nil && config.Enabled {
+			_, err = s.catchUpWithConfig(ctx, config, now)
+		}
 		wait := durationUntilNextMidnight(time.Now(), config.Location)
 		if err != nil {
-			g.Log().Errorf(ctx, "Demo data catch-up failed: %v", err)
+			g.Log().Errorf(ctx, "Online demo daily cycle failed: %v", err)
 			wait = retryInterval
 		}
 
