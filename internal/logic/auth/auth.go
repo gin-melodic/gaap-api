@@ -14,6 +14,7 @@ import (
 	"gaap-api/internal/logic/demo_data"
 	"gaap-api/internal/logic/utils"
 	"gaap-api/internal/model"
+	"gaap-api/internal/observability"
 	"gaap-api/internal/model/entity"
 	"gaap-api/internal/service"
 
@@ -98,6 +99,13 @@ func (s *sAuth) DemoLogin(ctx context.Context) (out *model.AuthResponse, err err
 }
 
 func (s *sAuth) login(ctx context.Context, in model.LoginInput, skipTurnstile bool) (out *model.AuthResponse, err error) {
+	defer func() {
+		if err == nil {
+			observability.RecordEvent(observability.EventAuthLoginSuccess, "info", in.Email)
+		} else {
+			observability.RecordEvent(observability.EventAuthLoginFailed, "warning", in.Email)
+		}
+	}()
 	in.Email = strings.ToLower(strings.TrimSpace(in.Email))
 	if in.Email == "" || in.Password == "" {
 		return nil, gerror.New("email and password are required")
@@ -400,6 +408,16 @@ func (s *sAuth) Disable2FA(ctx context.Context, code string, password string) (e
 
 // RefreshToken validates a refresh token and returns a new token pair
 func (s *sAuth) RefreshToken(ctx context.Context, refreshTokenStr string) (out *model.TokenPair, err error) {
+	out, err = s.refreshTokenCore(ctx, refreshTokenStr)
+	if err == nil {
+		observability.RecordEvent(observability.EventAuthRefreshSuccess, "info", "")
+	} else {
+		observability.RecordEvent(observability.EventAuthRefreshFailed, "warning", err.Error())
+	}
+	return
+}
+
+func (s *sAuth) refreshTokenCore(ctx context.Context, refreshTokenStr string) (out *model.TokenPair, err error) {
 	// Parse and validate the refresh token
 	token, err := jwt.Parse(refreshTokenStr, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {

@@ -27,6 +27,8 @@ type Client interface {
 	Close() error
 	Publish(ctx context.Context, queue string, msg *Message) error
 	Consume(ctx context.Context, queue string, handler func(ctx context.Context, msg *Message) error) error
+	// QueueInfo returns the ready-message depth and consumer count for a queue.
+	QueueInfo(ctx context.Context, queue string) (depth uint32, consumers uint32, err error)
 }
 
 // RabbitMQ manages RabbitMQ connections and channels
@@ -209,6 +211,24 @@ func (r *RabbitMQ) Publish(ctx context.Context, queue string, msg *Message) erro
 
 	g.Log().Debugf(ctx, "Published message to queue %s: %d", queue, msg.Type)
 	return nil
+}
+
+// QueueInfo inspects a queue without touching its messages.
+func (r *RabbitMQ) QueueInfo(ctx context.Context, queue string) (depth uint32, consumers uint32, err error) {
+	_ = ctx
+	r.mu.RLock()
+	channel := r.channel
+	r.mu.RUnlock()
+
+	if channel == nil {
+		return 0, 0, fmt.Errorf("RabbitMQ channel not initialized")
+	}
+
+	info, err := channel.QueueInspect(queue)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to inspect queue %s: %w", queue, err)
+	}
+	return uint32(info.Messages), uint32(info.Consumers), nil
 }
 
 // Consume starts consuming messages from the specified queue

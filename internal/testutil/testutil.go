@@ -114,6 +114,14 @@ func MockDBInit(mock sqlmock.Sqlmock) {
 	}
 }
 
+// ResetSchemaMocks clears the once-per-process schema mock tracking so a
+// fresh mock can re-register table schema expectations.
+func ResetSchemaMocks() {
+	gdbMu.Lock()
+	defer gdbMu.Unlock()
+	gdbTables = make(map[string]bool)
+}
+
 func MockMeta(mock sqlmock.Sqlmock, tableName string, columns []string) {
 	gdbMu.Lock()
 	defer gdbMu.Unlock()
@@ -147,6 +155,15 @@ func MockVersion(mock sqlmock.Sqlmock) {
 // MockMQ implements mq.Client for testing
 type MockMQ struct {
 	PublishedMessages []*mq.Message
+	// QueueInfos returns configured QueueInfo results per queue name.
+	QueueInfos map[string]MockQueueInfo
+}
+
+// MockQueueInfo holds a canned QueueInfo result for tests.
+type MockQueueInfo struct {
+	Depth     uint32
+	Consumers uint32
+	Err       error
 }
 
 func (m *MockMQ) IsConnected() bool                 { return true }
@@ -158,4 +175,13 @@ func (m *MockMQ) Publish(ctx context.Context, queue string, msg *mq.Message) err
 }
 func (m *MockMQ) Consume(ctx context.Context, queue string, handler func(ctx context.Context, msg *mq.Message) error) error {
 	return nil
+}
+func (m *MockMQ) QueueInfo(ctx context.Context, queue string) (uint32, uint32, error) {
+	if m.QueueInfos != nil {
+		info, ok := m.QueueInfos[queue]
+		if ok {
+			return info.Depth, info.Consumers, info.Err
+		}
+	}
+	return 0, 0, nil
 }

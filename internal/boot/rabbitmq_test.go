@@ -41,6 +41,10 @@ func (m *reconnectingMQ) Consume(context.Context, string, func(context.Context, 
 	return nil
 }
 
+func (m *reconnectingMQ) QueueInfo(context.Context, string) (uint32, uint32, error) {
+	return 0, 0, nil
+}
+
 func (m *reconnectingMQ) calls() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()

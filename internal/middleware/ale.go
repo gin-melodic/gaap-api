@@ -9,6 +9,7 @@ import (
 
 	"gaap-api/internal/ale"
 	"gaap-api/internal/crypto"
+	"gaap-api/internal/observability"
 
 	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/net/ghttp"
@@ -71,11 +72,13 @@ func ALEMiddleware(mode ALEMode) func(r *ghttp.Request) {
 		} else {
 			userId, sessionId := getSessionIdentityFromAuthHeader(r)
 			if userId == "" || sessionId == "" {
+				observability.RecordEvent(observability.EventALESessionExpired, "warning", r.URL.Path)
 				writeSessionExpiredError(r, "secure session required")
 				return
 			}
 			hexKey, err = ale.GetSessionKey(ctx, userId, sessionId)
 			if err != nil {
+				observability.RecordEvent(observability.EventALESessionExpired, "warning", r.URL.Path)
 				writeSessionExpiredError(r, "secure session expired, please login again")
 				return
 			}
@@ -93,6 +96,7 @@ func ALEMiddleware(mode ALEMode) func(r *ghttp.Request) {
 		nonce := r.Header.Get(HeaderNonce)
 
 		if signature == "" || timestamp == "" || nonce == "" {
+			observability.RecordEvent(observability.EventALEMissingHeaders, "warning", r.URL.Path)
 			writeProtoError(r, 400, "missing ALE headers", hexKey)
 			return
 		}
@@ -100,6 +104,7 @@ func ALEMiddleware(mode ALEMode) func(r *ghttp.Request) {
 		// Validate timestamp
 		if err := ale.ValidateTimestamp(timestamp); err != nil {
 			g.Log().Warningf(ctx, "ALE timestamp validation failed: %v", err)
+			observability.RecordEvent(observability.EventALETimestampInvalid, "warning", r.URL.Path)
 			writeProtoError(r, 403, "request timestamp out of range", hexKey)
 			return
 		}
@@ -118,6 +123,7 @@ func ALEMiddleware(mode ALEMode) func(r *ghttp.Request) {
 		// Verify signature
 		valid, err := ale.VerifySignature(iv, ciphertext, timestamp, nonce, signature, hexKey)
 		if err != nil || !valid {
+			observability.RecordEvent(observability.EventALESignatureInvalid, "error", r.URL.Path)
 			writeProtoError(r, 403, "invalid ALE signature", hexKey)
 			return
 		}
@@ -127,10 +133,12 @@ func ALEMiddleware(mode ALEMode) func(r *ghttp.Request) {
 		isNew, err := ale.CheckAndStoreNonce(ctx, nonce)
 		if err != nil {
 			g.Log().Error(ctx, "ALE replay store unavailable")
+			observability.RecordEvent(observability.EventALEReplayStoreUnavailable, "error", r.URL.Path)
 			writeProtoError(r, 503, "secure transport unavailable", hexKey)
 			return
 		}
 		if !isNew {
+			observability.RecordEvent(observability.EventALEReplay, "warning", r.URL.Path)
 			writeProtoError(r, 403, "ALE request replay detected", hexKey)
 			return
 		}
@@ -138,6 +146,7 @@ func ALEMiddleware(mode ALEMode) func(r *ghttp.Request) {
 		// Decrypt body
 		plaintext, err := ale.DecryptRequest(encryptedBody, hexKey)
 		if err != nil {
+			observability.RecordEvent(observability.EventALEDecryptFailed, "error", r.URL.Path)
 			writeProtoError(r, 400, "failed to decrypt ALE request", hexKey)
 			return
 		}

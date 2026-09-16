@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/net/ghttp"
@@ -11,6 +12,7 @@ import (
 	"gaap-api/internal/controller/account"
 	"gaap-api/internal/controller/auth"
 	"gaap-api/internal/controller/config"
+	"gaap-api/internal/controller/console"
 	"gaap-api/internal/controller/dashboard"
 	"gaap-api/internal/controller/data"
 	"gaap-api/internal/controller/health"
@@ -18,6 +20,7 @@ import (
 	"gaap-api/internal/controller/transaction"
 	"gaap-api/internal/controller/user"
 	"gaap-api/internal/middleware"
+	"gaap-api/internal/observability"
 	"gaap-api/internal/service"
 	"gaap-api/internal/ws"
 )
@@ -63,9 +66,25 @@ var (
 				return err
 			}
 
+			// The ops console mounts under a random path segment; an invalid
+			// override must fail boot instead of serving a guessable URL.
+			opsPathCode, err := middleware.ResolveOpsPathCode()
+			if err != nil {
+				return err
+			}
+
 			s := g.Server()
 			s.BindHandler("/v1/health/live", health.Live)
 			s.BindHandler("/v1/health/ready", health.Ready)
+
+			// Count every HTTP response for the ops console observation window.
+			s.BindHookHandler("/*", ghttp.HookAfterServe, func(r *ghttp.Request) {
+				status := r.Response.Status
+				if status == 0 {
+					status = http.StatusOK
+				}
+				observability.RecordHTTP(r.URL.Path, status)
+			})
 
 			// Public routes (no authentication, no ALE - health checks, etc.)
 			s.Group("/", func(group *ghttp.RouterGroup) {
@@ -95,6 +114,20 @@ var (
 					task.NewV1(),
 					data.NewV1(),
 				)
+			})
+
+			// Ops console: random path code, plain JSON, JWT + email allowlist.
+			// AuthMiddleware runs first so unauthenticated traffic gets a generic
+			// 401 (proto error, no ALE key in play); OpsAdmin adds the allowlist.
+			s.Group("/", func(group *ghttp.RouterGroup) {
+				group.Middleware(middleware.OpsRateLimit)
+				group.Middleware(middleware.AuthMiddleware)
+				group.Middleware(middleware.OpsAdmin)
+				group.GET("/v1/"+opsPathCode+"/status", console.Status)
+				// GET on the reconcile path answers 405 in the handler; the
+				// handler stays the single place that enforces POST-only.
+				group.GET("/v1/"+opsPathCode+"/reconcile", console.ReconcileNow)
+				group.POST("/v1/"+opsPathCode+"/reconcile", console.ReconcileNow)
 			})
 
 			s.Run()

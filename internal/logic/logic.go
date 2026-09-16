@@ -5,6 +5,7 @@ import (
 	_ "gaap-api/internal/logic/auth"
 	_ "gaap-api/internal/logic/balance"
 	_ "gaap-api/internal/logic/config"
+	_ "gaap-api/internal/logic/console"
 	_ "gaap-api/internal/logic/dashboard"
 	_ "gaap-api/internal/logic/data"
 	_ "gaap-api/internal/logic/demo_data"

@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"gaap-api/internal/logic/reconciliation"
+	"gaap-api/internal/observability"
 
 	"github.com/gogf/gf/v2/errors/gerror"
 	"github.com/gogf/gf/v2/frame/g"
@@ -46,6 +48,7 @@ func StartupReconcile(ctx context.Context) error {
 	report, err := reconciliation.Run(ctx)
 	if err != nil {
 		wrapped := gerror.Wrap(err, "startup reconciliation failed")
+		observability.RecordEvent(observability.EventReconciliationStartupFailed, "error", wrapped.Error())
 		if mode == "block" {
 			return wrapped
 		}
@@ -55,6 +58,8 @@ func StartupReconcile(ctx context.Context) error {
 
 	if report.Passed {
 		g.Log().Infof(ctx, "Startup reconciliation passed: %d account(s) and %d transaction(s) checked", report.AccountsChecked, report.TransactionsChecked)
+		observability.SetLastReconciliation(report, "startup", time.Now())
+		observability.RecordEvent(observability.EventReconciliationStartupPassed, "info", fmt.Sprintf("%d account(s), %d transaction(s) checked", report.AccountsChecked, report.TransactionsChecked))
 		return nil
 	}
 
@@ -63,6 +68,8 @@ func StartupReconcile(ctx context.Context) error {
 		payload = []byte(fmt.Sprintf("%+v", report))
 	}
 	g.Log().Errorf(ctx, "Startup ledger reconciliation failed: %s", payload)
+	observability.SetLastReconciliation(report, "startup", time.Now())
+	observability.RecordEvent(observability.EventReconciliationStartupFailed, "error", fmt.Sprintf("%d balance difference(s), %d issue(s)", len(report.Differences), len(report.Issues)))
 	if mode == "warn" {
 		return nil
 	}

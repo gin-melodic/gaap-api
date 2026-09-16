@@ -6,6 +6,7 @@ import (
 
 	"gaap-api/internal/dao"
 	"gaap-api/internal/logic/utils"
+	"gaap-api/internal/model"
 	"gaap-api/internal/model/entity"
 
 	"github.com/gogf/gf/v2/database/gdb"
@@ -15,33 +16,11 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// AccountDifference describes a persisted account balance that does not match
-// the balance reconstructed from active transactions.
-type AccountDifference struct {
-	AccountID  uuid.UUID `json:"accountId"`
-	UserID     uuid.UUID `json:"userId"`
-	Name       string    `json:"name"`
-	Type       int       `json:"type"`
-	Currency   string    `json:"currency"`
-	Actual     string    `json:"actual"`
-	Expected   string    `json:"expected"`
-	Difference string    `json:"difference"`
-}
-
-// Report is the result of a read-only reconciliation run.
-type Report struct {
-	Passed              bool                `json:"passed"`
-	AccountsChecked     int                 `json:"accountsChecked"`
-	TransactionsChecked int                 `json:"transactionsChecked"`
-	Differences         []AccountDifference `json:"differences"`
-	Issues              []string            `json:"issues"`
-}
-
 // Run reads a consistent database snapshot and compares every active account
 // balance with the balance reconstructed from active transactions. The
 // transaction is explicitly read-only so this command can never repair data.
-func Run(ctx context.Context) (*Report, error) {
-	var report *Report
+func Run(ctx context.Context) (*model.Report, error) {
+	var report *model.Report
 	err := g.DB().Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
 		if _, err := tx.Exec("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"); err != nil {
 			return gerror.Wrap(err, "failed to enforce read-only reconciliation")
@@ -92,11 +71,11 @@ func Run(ctx context.Context) (*Report, error) {
 }
 
 // Reconcile reconstructs account balances without modifying its inputs.
-func Reconcile(accounts []entity.Accounts, transactions []entity.Transactions) *Report {
-	report := &Report{
+func Reconcile(accounts []entity.Accounts, transactions []entity.Transactions) *model.Report {
+	report := &model.Report{
 		AccountsChecked:     len(accounts),
 		TransactionsChecked: len(transactions),
-		Differences:         make([]AccountDifference, 0),
+		Differences:         make([]model.AccountDifference, 0),
 		Issues:              make([]string, 0),
 	}
 
@@ -159,7 +138,7 @@ func Reconcile(accounts []entity.Accounts, transactions []entity.Transactions) *
 		if actual.Equal(expectedBalance) {
 			continue
 		}
-		report.Differences = append(report.Differences, AccountDifference{
+		report.Differences = append(report.Differences, model.AccountDifference{
 			AccountID:  account.Id,
 			UserID:     account.UserId,
 			Name:       account.Name,
